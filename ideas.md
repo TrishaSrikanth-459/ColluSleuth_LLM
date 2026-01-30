@@ -1,0 +1,12 @@
+# Ideas interesting to Elizabeth
+- Adversarial prompts vs. ensemble methods: week 1 paper claimed that model averaging did not substantially reduce adversarial classification accuracy. Could look at other ensemble methods, multiple in comparison, a specific goal of intrusion, or develop a new kind of testing.
+    - Awad, Z., Zakaria, M. & Hassan, R. An enhanced ensemble defense framework for boosting adversarial robustness of intrusion detection systems. Sci Rep 15, 14177 (2025). https://doi.org/10.1038/s41598-025-94023-z.
+    - Abbasi, M, Rajabi, A., Gagne, C., & Bobba, R. Toward adversarial robustness by diversity in an ensemble of specialized deep neural networks. Lecture Notes in Artificial Intelligence (2020). https://doi.org/10.48550/arXiv.2005.08321.
+    - Lin, Y., Pratama, J., Sudyana, D., Lai, Y., Hwang, R., Lin, P., Lin, H., Lee, W., & Chiang, C. ELAT: Ensemble Learning with Adversarial Training in defending against evaded intrusions. Journal of Information Security and Applications, Volume 71, 103348 (2022). https://doi.org/10.1016/j.jisa.2022.103348.
+- Indirect prompt injection in agent workflows: Could be cool since trojans are a big risk to agents today. Lots of things we could do: injections with different inputs, defenses, taint analysis
+    - Greshake, K., Abdelnabi, S., Mishra, S., Endres, C., Holz, T., & Fritz, M. Not what you’ve signed up for: compromising real-world LLM-integrated applications with indirect prompt injection. 2023. https://doi.org/10.1145/3605764.3623985.
+    - Hines, K., Lopez, G., Hall, M., Zarfati, F., Zunger, Y., & Kiciman, E. Defending against indirect prompt injection attacks with spotlighting. 2024. https://doi.org/10.48550/arXiv.2403.14720.
+    - Costa, M., Kopf, B., Kolluri, A., Paverd, A., Russinovich, M., Salem, A., Tople, S., Wutschitz, L., & Zanella-Beguelin, S. Securing AI agents with information flow-control. Microsoft (2025). https://doi.org/10.48550/arXiv.2505.23643.
+- Byzantine models in an ensemble: I don't know too much about the Byzantine Generals' Problem, but it seems interesting from a security perspective.
+    - Guerraoui, R., Gupta, N., & Pinot, R. Byzantine Machine Learning: a primer. ACM Computing Surveys, Volume 56, Issue 7 (2024). https://doi.org/10.1145/3616537.
+    - Fang, M., Cao, X., Jia, J., & Gong, N. Local model poisoning attacks to Byzantine-robust federated learning. 2020. https://www.usenix.org/system/files/sec20-fang.pdf.
