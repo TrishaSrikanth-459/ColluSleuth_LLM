@@ -2,267 +2,385 @@
 
 ---
 
-## Notation (Local to This File)
+## 0. Shared Assumptions Across All Families
 
-- Round index: `r`
-- Proposal set for round `r`: `P_r = {p_1^r, …, p_k^r}` (final proposal variants produced by proposers **by the end of the refinement phase of the same round**)
-- Evaluator outputs for round `r`: `ES[r]` (scores/ranks/accept flags over proposals in `P_r`)
-- Per-agent trust weights: `w_i` (from `RM[i]`)
-- Candidate selected for possible commitment in round `r`: `p*^r`
-- Byzantine agent id: `b`
+### 0.1 Intra-Round Ordering
 
----
+Each round `r` executes the following **fixed order**:
 
-## Shared Round Objects (All Families)
+1. **Proposal Phase**
+2. **Interaction / Refinement Phase**
+3. **Evaluation Phase**
+4. **State Update Phase**
+5. **Decision Rule Evaluation**
 
-### A. Proposal Set Construction (within round `r`)
-1. `k` proposers emit initial proposals `{p_i^r,0}`
-2. Critique/refinement occurs **within the same round** producing final proposals `{p_i^r,final}`
-3. Define `P_r := {p_i^r,final}` as the **frozen** proposal set for evaluation and decision in round `r`
-
-### B. Evaluation Call (within round `r`)
-- The evaluator(s) produce `ES[r]` over `P_r`
-- `ES[r]` is treated as the **only** per-round evaluation object consumed by the decision logic (even if internally derived from other state)
-
-> Family-specific differences begin at: how `p*^r` is chosen and what the commit predicate is.
+All memory writes occur **before** the decision rule, except where explicitly noted.
 
 ---
 
-## Family 1 — Vote-Based Aggregation
-Includes:
-1) **Majority voting (equal weight)**  
-2) **Trust-weighted voting (trust substrate `w_i`)**
+### 0.2 Frozen Objects Consumed by Decision Logic
 
-### 1.1 Majority Voting (Equal Weight)
-
-#### 1.1.1 Round `r` Decision Procedure
-**Input objects**
-- `P_r` (frozen proposals)
-- `ES[r]` (optional, depending on the variant; see below)
-
-**Step 1 — Determine the ballot options**
-- Ballot options are the proposals in `P_r`
-- If `|P_r| > 2`, each voter selects exactly one proposal (plurality ballot)
-
-**Step 2 — Voter rule (per agent voter `i`)**
-- Each voter `i` outputs a vote `v_i^r ∈ P_r`
-- Default voter mapping (deterministic):
-  - If the protocol uses evaluation mediation: `v_i^r := argmax_{p∈
-    
----
-
-## Common Round-Level Objects (All Families)
-
-At the end of the **interaction/refinement phase** of round `r`, the following objects are fixed:
+At the end of **State Update Phase** in round `r`, the following objects are frozen:
 
 - **Proposal set**  
-  `P_r = {p_1^r, …, p_k^r}`  
-  Final proposal variants produced *within round `r`*.
+  `P_r`: finalized proposals for round `r`
 
-- **Evaluation State**  
-  `ES[r]`, produced once per round over `P_r`.
+- **Evaluation state**  
+  `ES[r]`: evaluator outputs over `P_r`
 
-All consensus families differ **only** in:
-1. how `ES[r]` is interpreted,
-2. how (or whether) trust weights `w_i` are used,
-3. the condition under which a proposal is committed.
+- **Trust state**  
+  `RM`: per-agent trust weights (post-update for this round)
 
----
-
-## Family A — Vote-Based Aggregation
-
-This family commits based on **per-round voting outcomes**.  
-Commitment can occur in **any round**.
-
-### A.1 Majority Voting (Unweighted)
-
-#### Inputs (Round `r`)
-- Proposal set `P_r`
-- Optional: `ES[r]` (used only to restrict admissible proposals)
-
-#### Voting Procedure
-1. Each non-proposer agent casts **one vote**:
-   - Vote domain: `P_r`
-   - Vote selection rule:
-     - If evaluation-gated: vote must be for a proposal marked acceptable in `ES[r]`
-     - Otherwise: unrestricted choice
-2. Votes are counted with **equal weight**.
-
-#### Commit Predicate
-Let `count(p)` be the number of votes for proposal `p`.
-
-Commit `p*^r` iff:
-count(p*^r) > |V| / 2
-
-where `V` is the set of voters in round `r`.
-
-#### Non-Commit Outcome
-- If no proposal satisfies the predicate:
-  - Task continues to round `r+1`.
-
-#### Trust Usage
-- `RM` is **not consulted**.
-- `RM` may still be updated post-round, but has no effect on commitment.
+**Only these frozen objects may be consumed by the decision rule.**
 
 ---
 
-### A.2 Trust-Weighted Voting
+### 0.3 Interaction Topology
 
-Identical to majority voting except that votes are **weighted**.
+W fix **two** interaction topologies that
+span the behavior space observed in prior work.
 
-#### Inputs (Round `r`)
-- Proposal set `P_r`
-- Evaluation State `ES[r]`
-- Trust weights `{w_i}` from `RM`
+#### T1 — Centralized Star (Hub-and-Spoke)
 
-#### Voting Procedure
-1. Each voter `i` selects one proposal `v_i^r ∈ P_r`.
-2. Each vote contributes weight `w_i`.
+- One hub agent `h`
+- All agents communicate **only** with `h`
+- Hub aggregates and rebroadcasts
 
-#### Commit Predicate
+---
+
+#### T2 — Fully Connected Graph (Complete)
+- Every agent observes every other agent
+
+---
+
+## 1. Family 1 — Vote-Based Aggregation
+
+This family commits based on **per-round voting** over `P_r`.
+Commitment may occur in **any round**.
+
+### 1.1 Fixed Roles
+
+- **Proposers**: generate proposals forming `P_r`
+- **Voters**: cast ballots
+- **Vote Counter**: deterministic system module
+
+---
+
+### 1.2 Ballot Object
+
+Each voter `i` emits exactly one ballot:
+
+\[
+vote_i^r \in P_r
+\]
+
+---
+
+### 1.3 Variant A1 — Majority Voting (Unweighted)
+
+#### Commit Predicate (Round `r`)
+
 Let:
-W(p) = Σ_{i : v_i^r = p} w_i
-W_total = Σ_i w_i
+\[
+count(p) = |\{ i : vote_i^r = p \}|
+\]
 
+- Select:
+  \[
+  p^{*r} = \arg\max_p count(p)
+  \]
+  (deterministic tie-break)
+- **Commit** iff:
+  \[
+  count(p^{*r}) > |V_r| / 2
+  \]
 
-Commit `p*^r` iff:
-W(p*^r) ≥ τ · W_total
+If not satisfied, proceed to round `r+1`.
 
-where `τ` is a fixed threshold (default `τ = 0.5`).
+#### Artifacts Read
+- `P_r`
+- Ballots `{vote_i^r}`
 
-#### Non-Commit Outcome
-- If no proposal meets the threshold:
-  - Task continues.
+#### Artifacts Written
+- None required
 
-#### Trust Usage
-- `RM` directly affects commitment via vote weights.
-- Influence accumulation attacks target `RM`.
-
----
-
-## Family B — Weighted BFT-Style Commit Rules
-
-This family implements **explicit quorum logic** inspired by Byzantine Fault Tolerance.
-
-Commitment requires satisfying a **quorum predicate**, not just winning a vote.
-
-### B.1 Leader-Based Proposal Selection
-
-#### Inputs (Round `r`)
-- Proposal set `P_r`
-- Evaluation State `ES[r]`
-- Trust weights `{w_i}`
-
-#### Step 1 — Leader Selection
-- A leader `ℓ_r` is chosen deterministically:
-  - Fixed leader
-  - Rotating leader
-  - Highest-trust leader (`argmax_i w_i`)
-- Leader selection rule is fixed per experiment.
-
-#### Step 2 — Proposal Nomination
-- Leader selects exactly one proposal:
-p_lead^r ∈ P_r
-
-Selection may depend on `ES[r]`.
+#### Evaluator
+A deterministic system module that counts each proposal's votes and outputs the highest-voted proposal. 
 
 ---
 
-### B.2 Prepare / Commit Voting
+### 1.4 Variant A2 — Trust-Weighted Voting
 
-#### Prepare Phase
-- Each replica `i` issues a prepare vote:
-  - Accept or reject `p_lead^r`
-- Vote weight: `w_i`
+Votes are weighted by trust weights from `RM`.
+
+#### Weighted Tally
+
+\[
+W(p) = \sum_{i: vote_i^r=p} w_i,\quad
+W_{total} = \sum_i w_i
+\]
 
 #### Commit Predicate
+
+- Select:
+  \[
+  p^{*r} = \arg\max_p W(p)
+  \]
+- **Commit** iff:
+  \[
+  W(p^{*r}) \ge 0.5 \cdot W_{total}
+  \]
+
+#### Artifacts Read
+- `P_r`
+- `RM`
+- Ballots `{vote_i^r}`
+
+#### Artifacts Written
+- None required
+
+#### Evaluator
+- A deterministic system module that considers both a proposal's votes and the corresponding proposer to decide which proposal to output. 
+
+---
+
+## 2. Family 2 — Weighted BFT-Style Commit Rules
+
+This family implements **leader nomination + weighted quorum voting**.
+
+---
+### 2.1 Fixed Roles (Per Round `r`)
+
+- **Leader** `ℓ_r`  
+  Exactly one agent designated as leader for round `r`.
+
+- **Replicas**  
+  All agents except `ℓ_r`.  
+  Replicas do not propose new candidates; they only vote on the leader’s nomination.
+
+---
+
+### 2.2 Leader Selection
+
+- **Rotating leader (round-robin)**
+
+Leader identity is fixed deterministically as:
+\[
+\ell_r = (r \bmod N)
+\]
+
+- The leader selection rule is fixed for the entire task.
+- Leader identity does **not** depend on runtime behavior, votes, or trust updates.
+
+---
+
+### 2.3 Nomination Rule (Leader Action)
+
+At round `r`, the leader selects **exactly one** proposal from the frozen proposal set:
+
+\[
+p_{\text{lead}}^r \in P_r
+\]
+
+**Nomination constraints**
+- Selection is **deterministic**.
+- Selection is a fixed function of the evaluation state:
+\[
+p_{\text{lead}}^r = \arg\max_{p \in P_r} \text{score}_{ES[r]}(p)
+\]
+(ties broken deterministically).
+
+**Important clarifications**
+- The leader does **not** modify proposals.
+- The leader does **not** aggregate votes.
+- The leader does **not** influence quorum thresholds.
+- The leader’s only authority is proposal nomination.
+
+---
+
+### 2.4 Two-Phase Weighted Commit Protocol
+
+Commitment requires passing **both** phases in the same round.
+
+---
+
+#### Phase A — Prepare
+
+Each replica `i` independently evaluates the leader’s proposal and emits a prepare vote:
+
+\[
+prepare_i^r \in \{\text{ACCEPT}, \text{REJECT}\}
+\]
+
+Votes are weighted by trust:
+
+\[
+W_{\text{prepare}} = \sum_{i : prepare_i^r = \text{ACCEPT}} w_i
+\]
+
 Let:
-W_accept = Σ_{i accepts} w_i
-W_total = Σ_i w_i
+\[
+W_{\text{total}} = \sum_i w_i
+\]
 
+**Prepare threshold**
+\[
+W_{\text{prepare}} \ge \frac{2}{3} \cdot W_{\text{total}}
+\]
 
-Commit `p_lead^r` iff:
-W_accept ≥ Q
-
-where `Q` is the quorum threshold (e.g., `Q = 2/3 · W_total`).
-
-#### Failure Modes
-- If quorum is not reached:
-  - No commit
-  - Task proceeds to next round
-  - Leader may change in next round
-
-#### Trust Usage
-- Trust weights are **structural**, not advisory.
-- Attacks target quorum formation via `RM`, `ES`, or leader influence.
+- If the threshold is **not met**, the protocol:
+  - does **not** commit,
+  - does **not** enter Phase B,
+  - proceeds to round `r+1`.
 
 ---
 
-## Family C — Persistence-Based Finalization
+#### Phase B — Commit
 
-This family **never commits in a single round**.  
-Commitment requires **temporal stability** across rounds.
+Executed **only if** the Prepare phase succeeds.
 
-### C.1 Stability Tracking
+Each replica `i` emits a commit vote:
 
-#### Inputs (Round `r`)
-- Proposal set `P_r`
-- Evaluation State `ES[r]`
+\[
+commit_i^r \in \{\text{ACCEPT}, \text{REJECT}\}
+\]
 
-#### Step 1 — Canonical Proposal Selection
-- A deterministic selection function `S` is applied:
-p*^r = S(P_r, ES[r])
+Weighted support:
+\[
+W_{\text{commit}} = \sum_{i : commit_i^r = \text{ACCEPT}} w_i
+\]
 
-Examples:
-- Highest-ranked proposal
-- Lexicographically smallest among top-scored
-- Median-ranked proposal
+**Commit threshold**
+\[
+W_{\text{commit}} \ge \frac{2}{3} \cdot W_{\text{total}}
+\]
 
-This produces **one candidate per round**.
-
----
-
-### C.2 Persistence Counter
-
-Define:
-- `H_r` = number of consecutive rounds up to `r` where `p*^r` is unchanged
-
-Update rule:
-if p*^r == p*^(r-1):
-H_r = H_{r-1} + 1
-else:
-H_r = 1
-
+- If satisfied:
+  - `p_{\text{lead}}^r` is **committed**,
+  - the task terminates immediately.
+- If not satisfied:
+  - no commitment occurs,
+  - the task proceeds to round `r+1`.
 
 ---
 
-### C.3 Commit Predicate
+### 2.5 Artifacts Read (Decision-Critical)
 
-Commit `p*^r` iff:
-H_r ≥ β
+The commit predicate reads **only**:
 
-where `β` is the fixed stability horizon.
+- `P_r` — frozen proposal set
+- `RM` — trust weights (structural)
+- `ES[r]` — used **only** for leader nomination
 
-#### Non-Commit Outcome
-- If stability breaks:
-  - Counter resets
-- If `β` is never reached:
-  - Task ends by abort or timeout
-
-#### Trust Usage
-- Trust may affect:
-  - Evaluation scores
-  - Tie-breaking in `S`
-- Trust does **not** directly trigger commitment.
+No other memory artifacts are consulted by the commit logic.
 
 ---
 
-## Summary: What Actually Differs Across Families
+### 2.6 Artifacts Written (Minimal Audit Set)
 
-| Aspect | Vote-Based | Weighted BFT | Persistence-Based |
-|---|---|---|---|
-| Commit timing | Any round | Any round | Only after β rounds |
-| Commit trigger | Vote threshold | Quorum threshold | Temporal stability |
-| Uses trust weights | Optional | Mandatory | Indirect only |
-| Leader role | None | Required | None |
-| Primary attack target | RM / ES | RM / ES / leader | SM / ES / persistence |
+The following artifacts are persisted for correctness auditing:
+
+- `Leader[r] = \ell_r`
+- `Nomination[r] = p_{\text{lead}}^r`
+- `PrepareVotes[r] = \{prepare_i^r\}`
+- `CommitVotes[r] = \{commit_i^r\}`
+
+These artifacts:
+- are written **after** their respective phases,
+- are not read by future rounds unless explicitly enabled for analysis,
+- are sufficient to reconstruct whether quorum conditions were met.
+
+---
+
+## 3. Family 3 — Persistence-Based Finalization
+
+This family commits **only after stability across rounds**.
+
+---
+
+### 3.1 Fixed Roles
+
+- **Proposers**
+- **Stability Engine** (system module)
+
+No agentic evaluators by default.
+
+---
+
+### 3.2 Selection Function
+
+Each round:
+\[
+p^{*r} = \arg\max_{p \in P_r} \text{plurality}(p)
+\]
+
+No trust weighting inside `S`.
+
+---
+
+### 3.3 Equivalence Relation
+
+- **Exact match only**
+
+---
+
+### 3.4 Persistence Counter
+
+Let `H_r` track consecutive identical selections:
+
+- If `p^{*r} = p^{*(r-1)}` → `H_r = H_{r-1} + 1`
+- Else → `H_r = 1`
+
+---
+
+### 3.5 Commit Predicate
+
+Commit iff:
+\[
+H_r \ge \beta
+\]
+
+Default:
+- `β = 2`
+
+---
+
+### 3.6 Artifacts Read
+- `P_r`
+- Past `p^{*}` history
+
+### 3.7 Artifacts Written
+- `Candidate[r]`
+- `H_r`
+
+---
+
+## 4. Final Experimental Scope
+
+### What We Test
+- 3 consensus families
+- 2 interaction topologies (Star, Complete)
+- 3 access regimes (A, B, C)
+- Single-artifact and selected compound attacks (as defined elsewhere)
+
+### What We Explicitly Do *Not* Test
+- Ring / expanding-ring diffusion
+- Adaptive leader policies
+- Multiple equivalence metrics
+- Multiple quorum thresholds
+- Agentic evaluators inside vote counting
+- Dynamic protocol switching
+
+---
+
+## 5. Why This Is Enough
+
+This configuration:
+- Covers **direct voting**, **trust-weighted influence**, **quorum logic**, and **temporal persistence**
+- Preserves all **mechanistically distinct attack surfaces**
+- Avoids parameter explosion
+- Is feasible for a small, focused research team
+
+Any additional protocol variants would **increase cost without adding new explanatory power**.
+
+This file defines the **final, locked-down protocol layer** for experiments.
