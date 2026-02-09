@@ -72,10 +72,6 @@ Each round consists of:
 4.  **Commit Check**
     -   Deterministic decision rule evaluates whether commitment conditions are met
 
-### 3.2 Decision Rule Execution vs. Task Commitment
-
-It is critical to distinguish between **decision rule evaluation** and **final commitment**, which occur at different logical levels in the protocol.
-
 ---
 
 ### 3.2 Definitions: Round vs. Task
