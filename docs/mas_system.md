@@ -165,6 +165,8 @@ Following prior work on multi-agent LLM architectures, we classify memory by **p
 
 This classification is critical: **covert Byzantine attacks may target memory that is not directly consumed by the commit rule**, but which indirectly shapes trust, evaluation, or persistence.
 
+---
+
 #### 4.1.1 Short-Term (Working) Memory
 
 **What it is**
@@ -193,6 +195,8 @@ This classification is critical: **covert Byzantine attacks may target memory th
 -   **Not a trust substrate**.
 -   Explicitly excluded from attacks.
 
+---
+
 #### 4.1.2 Single-Agent Long-Term Memory
 
 **What it is**
@@ -219,6 +223,8 @@ This classification is critical: **covert Byzantine attacks may target memory th
 **Security relevance**
 -   We explicitly allow Byzantine agents to utilize their single-agent long-term memory to plan adaptive, multi-round strategies respecting covert tampering and influence accumulation.
 -   That being said, this component of memory is not considered part of the attacks surface, as it is not susceptible to trust-substrate attacks.
+
+---
 
 #### 4.1.3 Episodic Memory
 
@@ -247,6 +253,8 @@ This classification is critical: **covert Byzantine attacks may target memory th
 **Security relevance**
 -   We explicitly allow Byzantine agents to utilize their episodic memory to plan adaptive, multi-round strategies respecting covert tampering and influence accumulation.
 -   That being said, this component of memory is not considered part of the attacks surface, as it is not susceptible to trust-substrate attacks.
+
+---
 
 #### 4.1.4 Consensus Memory
 
