@@ -1,163 +1,113 @@
-# consensus_system.md
-**Consensus-Mechanism Instantiations (Locked Experimental Protocol Layer)**
+**Consensus-Mechanism Instantiations**
 
-This file defines the **final, executable consensus protocols** used in experiments.
-It assumes the global system model, memory taxonomy, and access regimes are defined elsewhere.
-Nothing in this file introduces new memory artifacts or adaptive protocol behavior.
+This file specifies the **exact executable consensus mechanisms** evaluated in experiments.
+It assumes that the system class, agent model, memory taxonomy (IM / SM / ES / RM),
+and access regimes (A / B / C) are defined elsewhere.
+
+This file answers one question only:
+
+> *Given a frozen proposal set at the end of a round, how does the system decide whether to commit — and to what?*
 
 ---
 
-## 0. Shared Assumptions Across All Families
+## 0. Global Execution Model (Applies to All Families)
 
-### 0.1 Intra-Round Phase Ordering (Authoritative)
+### 0.1 Intra-Round Phase Ordering
 
 Each round `r` executes the following **fixed, linear sequence**:
 
-1. **Proposal Phase**
-2. **Interaction / Refinement Phase**
-3. **Evaluation Phase**
-4. **State Update Phase**
+1. **Proposal Phase**  
+2. **Interaction / Refinement Phase**  
+3. **Evaluation Phase** *(only if the family defines evaluators)*  
+4. **State Update Phase** *(only if the family updates trust)*  
 5. **Decision Rule Evaluation**
 
-There is **no branching or overlap** between phases.
-
-**Key invariant**
-- All memory writes (IM, SM, ES, RM) occur **before** the decision rule.
-- The decision rule is **read-only** over frozen state.
+There is **no overlap or branching** between phases.
 
 ---
 
-### 0.2 Frozen Objects Consumed by Decision Logic
+### 0.2 Frozen State for Decision Logic
 
-At the end of **State Update Phase** in round `r`, the following objects are frozen:
+At the end of the **State Update Phase**, the following objects are frozen:
 
-- **Proposal set**  
-  `P_r` — final proposals produced in round `r`
+- `P_r` — final proposal set for round `r`
+- `ES[r]` — evaluation outputs (only if evaluators exist)
+- `RM` — trust weights after update (only if trust is used)
 
-- **Evaluation state**  
-  `ES[r]` — evaluator outputs over `P_r` (if evaluators exist in the family)
+**The decision rule may read only these frozen objects.**
 
-- **Trust state**  
-  `RM` — post-update trust weights for round `r` (if used by the family)
-
-**Only these objects may be consumed by the decision rule.**
-
-No decision logic reads:
+It may **not** read:
 - Interaction Memory (IM)
 - Summary Memory (SM)
-- Raw messages
-- Intermediate drafts
-
+- Raw messages or drafts
+- Intermediate votes or critiques
+  
 ---
 
-## 0.3 Interaction Topology (Explicit Synchronization With Phases)
+### T2 — Fully Connected Graph
 
-Topology controls **only the Interaction / Refinement Phase**.
-All other phases are topology-independent.
+- Every agent observes every other agent's outputs.
+- All proposals, critiques, and refinements are globally visible, although not all agents are responsible for responding to certain received outputs.
 
-### Why Interaction Exists at All
-
-Interaction is **not** required for voting or quorum logic.
-It exists to:
-- allow critique and refinement,
-- induce conformity or disagreement,
-- shape which proposals survive into `P_r`.
-
-Once `P_r` is frozen, topology is irrelevant.
-
----
-
-### T1 — Centralized Star (Hub-and-Spoke)
-
-**Graph**
-- One distinguished hub agent `h`
-- All other agents connect only to `h`
-
-**Interaction Phase Semantics**
-- Each non-hub agent sends critiques/refinements to `h`
-- `h` aggregates and rebroadcasts a synthesized refinement
-- Non-hub agents do **not** observe each other directly
-
-**Evaluator implication**
-- There may be **multiple evaluators**, but:
-  - evaluators do **not** interact,
-  - evaluators only see `P_r` (and optionally `SM[r]`), never raw IM
-
----
-
-### T2 — Fully Connected (Complete Graph)
-
-**Graph**
-- Every agent connects to every other agent
-
-**Interaction Phase Semantics**
-- All agents see all critiques and refinements
-- Refinement pressure is maximized
-- Conformity emerges fastest in this topology
-
-**Evaluator implication**
-- Same as T1: evaluators never participate in interaction
-
----
-
-**Topology constraint**
-- Topology affects **what information flows during interaction**
-- Topology never changes:
-  - proposal freezing,
-  - evaluation logic,
-  - trust updates,
-  - decision predicates
+**Effect**:  
+Maximum conformity pressure and fastest diffusion.
 
 ---
 
 ## 1. Family 1 — Vote-Based Aggregation
 
-**One-round voting. No quorum memory. No persistence.**
+**Core idea:**  
+> *Commit if enough agents explicitly vote for the same proposal in a single round.*
 
-Commitment may occur in **any round**.
+There is:
+- **no evaluator**
+- **no trust update**
+- **no cross-round memory**
+
+This family isolates *direct influence via voting*.
 
 ---
 
 ### 1.1 Roles
 
 - **Proposers**  
-  Generate candidate proposals.
+  Generate proposals during the Proposal Phase.
 
 - **Voters**  
-  Cast exactly one vote each.
+  Every agent casts exactly one vote.
 
-- **Vote Counter**  
-  Deterministic system module (not an agent).
+- **Vote Counter (System Module)**  
+  Deterministically tallies votes and checks the commit condition.
 
 ---
 
-### 1.2 Phase Alignment
+### 1.2 Phase Mechanics
 
-| Phase | What Happens |
-|-----|-------------|
-| Proposal | Proposers generate candidates |
-| Interaction | Optional refinement (topology-dependent) |
+| Phase | Behavior |
+|-----|---------|
+| Proposal | Proposals generated |
+| Interaction | *None* (topology irrelevant here) |
 | Evaluation | *None* |
 | State Update | *None* |
-| Decision Rule | Votes are counted |
+| Decision Rule | Votes counted |
 
 ---
 
 ### 1.3 Variant A1 — Majority Voting (Unweighted)
 
-**Decision rule (round `r`)**
+**Decision logic (round `r`)**
 
 1. Each voter selects **one** proposal from `P_r`.
-2. Count votes per proposal.
-3. Select the proposal with the most votes.
-4. Commit **only if** it has a strict majority.
+2. Count how many votes each proposal receives.
+3. Identify the proposal with the highest count.
+4. **Commit only if** that proposal has a strict majority.
 
 **Commit condition**
-- More than half of voters selected the same proposal.
+- More than half of all voters selected the same proposal.
 
 **If not met**
-- No commit.
-- Proceed to round `r+1`.
+- No commitment.
+- Task proceeds to round `r+1`.
 
 **Artifacts read**
 - `P_r`
@@ -166,8 +116,9 @@ Commitment may occur in **any round**.
 **Artifacts written**
 - None
 
-**Evaluator**
-- Deterministic vote counter only.
+**Key property**
+- Influence is purely *numerical*.
+- No agent has structural advantage.
 
 ---
 
@@ -175,12 +126,12 @@ Commitment may occur in **any round**.
 
 Same as A1, except votes are **weighted by trust**.
 
-**Decision rule (round `r`)**
+**Decision logic (round `r`)**
 
 1. Each voter selects one proposal from `P_r`.
 2. Each vote contributes weight `w_i` from `RM`.
-3. Sum weights per proposal.
-4. Commit if one proposal reaches ≥ 50% of total trust weight.
+3. Sum total trust weight per proposal.
+4. **Commit if** a proposal accumulates at least 50% of total trust.
 
 **Artifacts read**
 - `P_r`
@@ -190,159 +141,351 @@ Same as A1, except votes are **weighted by trust**.
 **Artifacts written**
 - None
 
-**Evaluator**
-- Deterministic weighted vote counter.
-- No agentic judgment or deliberation.
+**Key property**
+- Trust directly amplifies influence.
+- Manipulating `RM` directly manipulates commitment.
 
 ---
 
-## 2. Family 2 — Weighted BFT-Style Commit Rules
+## 2. Family 2 — Weighted BFT
 
-**Leader nomination + weighted quorum voting.**
+**Core idea**  
+A single trusted leader sets the agenda by nominating one proposal,  
+while the group retains final authority via a weighted quorum vote.
 
-Commitment requires **two explicit quorum checks** in the same round.
+Each round represents **one attempt to commit**.
+A new round is entered **only if quorum is not reached**.
 
 ---
 
-### 2.1 Roles (Per Round)
+## 2.1 Roles
+
+- **Proposers**  
+  Agents that generate candidate proposals.
 
 - **Leader**  
-  Exactly one agent, selected by trust.
+  One agent selected by trust at task initialization.
+  The leader nominates exactly one proposal per round.
 
 - **Replicas**  
   All non-leader agents.
+  Replicas:
+  - do not nominate proposals,
+  - do not modify proposals,
+  - cast advisory votes and quorum votes.
+
+No evaluators are used in this family.
 
 ---
 
-### 2.2 Phase Alignment
+## 2.2 Leader Selection (Once Per Task)
+
+Leader selection occurs **once**, before round `r = 1`.
+
+\[
+\ell = \arg\max_i RM_{\text{init}}[i]
+\]
+
+- `RM_init` is the trust state at task start.
+- Ties are broken deterministically.
+
+**Design constraints**
+- Leader identity is fixed for the entire task.
+- Leader selection:
+  - does not change across rounds,
+  - does not depend on runtime votes,
+  - prevents mid-task RM manipulation from immediately yielding control.
+
+---
+
+## 2.3 Phase Alignment (Round `r`)
 
 | Phase | What Happens |
-|-----|-------------|
-| Proposal | Proposers generate candidates |
-| Interaction | Refinement (topology-dependent) |
-| Evaluation | Evaluators score `P_r` |
+|------|--------------|
+| Proposal | Proposers generate candidate proposals |
+| Interaction | *None* |
+| Evaluation | *None* |
 | State Update | RM updated |
-| Decision Rule | Leader nomination + quorum voting |
+| Decision Rule | Advisory voting → leader nomination → quorum vote |
+
+All steps below occur **within a single round**.
 
 ---
 
-### 2.3 Leader Selection
+## 2.4 Proposal Phase (Source of `P_r`)
 
-At the **start of Decision Rule Evaluation**:
+At the start of round `r`:
 
-- Leader is the agent with highest trust in `RM`.
-- Ties broken deterministically.
+- Each proposer independently generates one candidate output.
+- All candidate outputs are collected into the frozen proposal set:
 
-Leader selection:
-- uses **only RM**,
-- is recomputed every round,
-- is not adaptive beyond trust updates.
-
----
-
-### 2.4 Nomination Rule
-
-Leader selects **exactly one** proposal from `P_r`.
-
-Selection rule:
-- Deterministic.
-- Highest evaluator score in `ES[r]`.
-
-Leader has **no other powers**.
+\[
+P_r = \{p_1^r, p_2^r, \dots, p_k^r\}
+\]
 
 ---
 
-### 2.5 Two-Phase Commit Logic
+## 2.5 Advisory Replica Voting (Pre-Nomination)
 
-#### Phase A — Prepare
+Before leader nomination, each replica `i` casts **one advisory vote**:
 
-- Each replica votes ACCEPT or REJECT.
-- Votes are weighted by trust.
-- If < 2/3 of total trust ACCEPT → round fails.
+\[
+vote_i^r \in P_r
+\]
 
-#### Phase B — Commit
+Votes are collected as:
 
-- Executed only if Prepare succeeds.
-- Same voting rule.
-- If ≥ 2/3 ACCEPT → commit and terminate task.
+\[
+Votes[r] = \{vote_i^r\}
+\]
+
+**Properties**
+- Advisory votes:
+  - are non-binding,
+  - do not trigger commitment,
+  - exist solely to inform the leader.
+- Votes are cast on fully formed proposals in `P_r`.
 
 ---
 
-### 2.6 Artifacts
+## 2.6 Inputs Available to the Leader (Round `r`)
 
-**Read**
+Before nomination, the leader may read:
+
+- `P_r` — frozen proposal set
+- `Votes[r]` — advisory replica preferences
+- `RM` — trust weights (contextual information)
+
+The leader does **not** see:
+- replica internal reasoning,
+- raw interaction logs,
+- any future-round information.
+
+---
+
+## 2.7 Nomination Rule (Leader Action)
+
+The leader selects **exactly one** proposal:
+
+\[
+p_{\text{lead}}^r \in P_r
+\]
+
+**Nomination policy**
+- The choice is **agentic and non-deterministic**.
+- The leader may consider:
+  - advisory votes,
+  - trust distribution,
+  - its own internal reasoning.
+
+**Hard constraints**
+- The leader:
+  - cannot modify proposals,
+  - cannot merge or split proposals,
+  - cannot adjust quorum thresholds,
+  - cannot count or weight votes.
+
+The leader’s authority is strictly **agenda-setting**.
+
+---
+
+## 2.8 Weighted Quorum Commit Logic (Within Round `r`)
+
+After nomination, replicas independently decide whether the proposal is acceptable.
+
+### Quorum Vote
+
+Each replica `i` casts a binary vote:
+
+\[
+accept_i^r \in \{\text{ACCEPT}, \text{REJECT}\}
+\]
+
+Votes are **chosen agentically** by replicas.
+Trust weights affect **aggregation only**, not vote choice.
+
+### Aggregation
+
+\[
+W_{\text{accept}} = \sum_{i \text{ voting ACCEPT}} w_i
+\]
+\[
+W_{\text{total}} = \sum_i w_i
+\]
+
+### Commit Condition
+
+\[
+W_{\text{accept}} \ge \frac{2}{3} \cdot W_{\text{total}}
+\]
+
+- If the condition is satisfied:
+  - `p_{\text{lead}}^r` is **committed immediately**,
+  - the task terminates,
+  - **no further rounds are executed**.
+
+- If the condition is not satisfied:
+  - no commitment occurs in round `r`,
+  - execution proceeds to round `r+1`.
+
+---
+
+## 2.9 Artifacts
+
+**Read by decision logic**
 - `P_r`
+- `Votes[r]`
 - `RM`
-- `ES[r]`
 
 **Written (audit only)**
 - Leader identity
+- Advisory votes
 - Nomination
-- Prepare votes
-- Commit votes
+- Quorum votes
 
 ---
 
-## 3. Family 3 — Persistence-Based Finalization
+## 3. Family 3 — Persistence-Based Finalization 
 
-**No voting. No quorum. No trust use.**
+### Core Idea 
 
-Commitment depends on **stability across rounds**.
+> A proposal is committed **only if multiple agents independently produce the same proposal
+> in multiple consecutive rounds**.
 
----
+There is:
+- no voting,
+- no trust,
+- no leader,
+- no evaluators.
 
-### 3.1 Roles
-
-- **Proposers**
-- **Stability Engine** (system module)
-
-No evaluators by default.
-
----
-
-### 3.2 Phase Alignment
-
-| Phase | What Happens |
-|-----|-------------|
-| Proposal | Proposals generated |
-| Interaction | Optional refinement |
-| Evaluation | *None* |
-| State Update | *None* |
-| Decision Rule | Stability check |
+Agreement is inferred **only from repeated independent generation**.
 
 ---
 
-### 3.3 Canonical Selection
+## 3.1 Roles
 
-Each round:
-- Select the proposal with the most proposer support.
-- Deterministic tie-breaking.
+- **Proposers**  
+  All agents act only as proposers.
+
+- **Stability Engine** (system module)  
+  Observes proposals and checks persistence conditions.
+  It does **not** judge quality or correctness.
 
 ---
 
-### 3.4 Persistence Rule
+## 3.2 What Happens Each Round (Very Explicit)
 
-- Track how many consecutive rounds the same proposal is selected.
-- Commit once the same proposal appears for `β` consecutive rounds.
+### Step 1 — Proposal Generation
+In round `r`, **every agent independently generates one proposal**.
+
+This produces:
+\[
+P_r = \{p_1^r, p_2^r, \dots, p_N^r\}
+\]
+
+Agents do **not** vote, score, rank, or evaluate.
+
+---
+
+### Step 2 — Proposal Grouping (Exact Match Only)
+
+The system groups proposals by **reasonable textual equality** by a single LL.  
+
+Example:
+- Agent 1: `"Plan A"`
+- Agent 2: `"Plan A"`
+- Agent 3: `"Plan B"`
+
+Then:
+- `"Plan A"` has support 2
+- `"Plan B"` has support 1
+
+---
+
+### Step 3 — Round Candidate Selection
+
+Let:
+\[
+support_r(p) = \text{number of agents who produced proposal } p \text{ in round } r
+\]
+
+Select the proposal with the **highest support**:
+\[
+p_r^* = \arg\max_p support_r(p)
+\]
+
+Ties are broken deterministically.
+
+---
+
+### Step 4 — Minimum Support Check
+
+If:
+\[
+support_r(p_r^*) < \alpha
+\]
+
+then:
+- **no candidate is accepted this round**, and
+- the persistence counter resets.
+
+Default:
+- `α = 2`
+
+This means:
+> At least **two different agents** must independently produce the same proposal
+> in the *same round* for it to even count.
+
+A single Byzantine agent **cannot progress alone**.
+
+---
+
+## 3.3 Persistence Rule (Across Rounds)
+
+The system tracks a counter `H_r`:
+
+- If:
+  - a valid candidate exists this round, **and**
+  - it is the same as last round’s candidate,
+
+  then:
+  \[
+  H_r = H_{r-1} + 1
+  \]
+
+- Otherwise:
+  \[
+  H_r = 1 \quad \text{(if a new valid candidate appears)}
+  \]
+  or
+  \[
+  H_r = 0 \quad \text{(if no candidate passes } \alpha\text{)}
+  \]
+
+---
+
+## 3.4 Commit Condition
+
+Commit when:
+\[
+H_r \ge \beta
+\]
 
 Default:
 - `β = 2`
 
+In words:
+> The **same proposal**, produced by **at least two agents**, must appear
+> in **two consecutive rounds**.
+
+**This IS**
+- a test of **temporal influence**,
+- a test of **convergence dynamics**,
+- a test of **long-horizon manipulation**.
+  
 ---
 
-### 3.5 Artifacts
-
-**Read**
-- `P_r`
-- Previous selected proposal
-
-**Written**
-- Selected candidate
-- Persistence counter
-
----
-
-## 4. Final Experimental Scope (Locked)
+## 4. Experimental Scope (Final and Locked)
 
 ### What We Test
 
@@ -351,26 +494,30 @@ Default:
 - 3 access regimes (A, B, C)
 - Single-artifact + selected compound attacks
 
-### What We Do *Not* Test
+### What We Do Not Test
 
-- Ring / expanding diffusion
+- Ring or expanding diffusion
 - Adaptive leader policies
 - Multiple equivalence metrics
 - Multiple quorum thresholds
 - Agentic vote counting
-- Dynamic protocol switching
+- Protocol switching
 
 ---
 
-## 5. Why This Design Is Sufficient
+## 5. Why These Families Are Mechanistically Distinct
 
-This setup:
-- Spans **voting**, **trust-weighted influence**, **quorum consensus**, and **temporal stability**
-- Covers all **mechanistically distinct attack surfaces**
-- Avoids parameter explosion
-- Is feasible for a small, high-performing undergraduate team
+| Family | What Decides Commitment |
+|------|--------------------------|
+| Vote-Based | Immediate numerical agreement |
+| BFT-Style | Trusted nomination + supermajority |
+| Persistence-Based | Repeated agreement over time |
 
-Any further protocol variants would increase cost without increasing explanatory power.
+Each family exposes a **different attack surface**:
+- numerical manipulation,
+- trust/quorum manipulation,
+- temporal manipulation.
 
-**This protocol layer is final and locked.**
+Together, they span the relevant design space **without parameter explosion**.
 
+**This protocol layer is final.**
