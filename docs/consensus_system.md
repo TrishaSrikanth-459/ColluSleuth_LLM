@@ -44,6 +44,16 @@ It may **not** read:
   
 ---
 
+### 0.3 Interaction Topology
+
+W fix two interaction topologies that span the behavior space observed in prior work.
+
+---
+### T1 — Centralized Star (Hub-and-Spoke)
+- One hub agent h
+- All agents communicate only with h
+- Hub aggregates and rebroadcasts
+
 ### T2 — Fully Connected Graph
 
 - Every agent observes every other agent's outputs.
@@ -389,7 +399,7 @@ Agents do **not** vote, score, rank, or evaluate.
 
 ### Step 2 — Proposal Grouping (Exact Match Only)
 
-The system groups proposals by **reasonable textual equality** by a single LL.  
+The system groups proposals by **reasonable textual equality**, judged by a single LLM.  
 
 Example:
 - Agent 1: `"Plan A"`
