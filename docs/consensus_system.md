@@ -1,4 +1,4 @@
-**Consensus-Mechanism Instantiations**
+# **Consensus-Mechanism Instantiations**
 
 This file specifies the **exact executable consensus mechanisms** evaluated in experiments.
 It assumes that the system class, agent model, memory taxonomy (IM / SM / ES / RM),
