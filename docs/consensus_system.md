@@ -70,9 +70,9 @@ Commitment may occur in **any round**.
 
 Each voter `i` emits exactly one ballot:
 
-\[
+$$
 vote_i^r \in P_r
-\]
+$$
 
 ---
 
@@ -81,19 +81,24 @@ vote_i^r \in P_r
 #### Commit Predicate (Round `r`)
 
 Let:
-\[
-count(p) = |\{ i : vote_i^r = p \}|
-\]
+
+$$
+count(p) = \left|\{\, i : vote_i^r = p \,\}\right|
+$$
 
 - Select:
-  \[
-  p^{*r} = \operatorname*{arg\,max}_p count(p)
-  \]
+
+$$
+p^{*r} = \underset{p}{\arg\max}\; count(p)
+$$
+
   (deterministic tie-break)
+
 - **Commit** iff:
-  \[
-  count(p^{*r}) > |V_r| / 2
-  \]
+
+$$
+count(p^{*r}) > |V_r| / 2
+$$
 
 If not satisfied, proceed to round `r+1`.
 
@@ -115,21 +120,24 @@ Votes are weighted by trust weights from `RM`.
 
 #### Weighted Tally
 
-\[
+$$
 W(p) = \sum_{i: vote_i^r=p} w_i,\quad
 W_{total} = \sum_i w_i
-\]
+$$
 
 #### Commit Predicate
 
 - Select:
-  \[
-  p^{*r} = \operatorname*{arg\,max}_p W(p)
-  \]
+
+$$
+p^{*r} = \underset{p}{\arg\max}\; W(p)
+$$
+
 - **Commit** iff:
-  \[
-  W(p^{*r}) \ge 0.5 \cdot W_{total}
-  \]
+
+$$
+W(p^{*r}) \ge 0.5 \cdot W_{total}
+$$
 
 #### Artifacts Read
 - `P_r`
@@ -149,6 +157,7 @@ W_{total} = \sum_i w_i
 This family implements **leader nomination + weighted quorum voting**.
 
 ---
+
 ### 2.1 Fixed Roles (Per Round `r`)
 
 - **Leader** `ℓ_r`  
@@ -165,9 +174,10 @@ This family implements **leader nomination + weighted quorum voting**.
 - **Rotating leader (round-robin)**
 
 Leader identity is fixed deterministically as:
-\[
+
+$$
 \ell_r = (r \bmod N)
-\]
+$$
 
 - The leader selection rule is fixed for the entire task.
 - Leader identity does **not** depend on runtime behavior, votes, or trust updates.
@@ -178,16 +188,18 @@ Leader identity is fixed deterministically as:
 
 At round `r`, the leader selects **exactly one** proposal from the frozen proposal set:
 
-\[
-p_{\text{lead}}^r \in P_r
-\]
+$$
+p_{\mathrm{lead}}^r \in P_r
+$$
 
 **Nomination constraints**
 - Selection is **deterministic**.
 - Selection is a fixed function of the evaluation state:
-\[
-p_{\text{lead}}^r = \operatorname*{arg\,max}_{p \in P_r} \text{score}_{ES[r]}(p)
-\]
+
+$$
+p_{\mathrm{lead}}^r = \underset{p \in P_r}{\arg\max}\; \mathrm{score}_{ES[r]}(p)
+$$
+
 (ties broken deterministically).
 
 **Important clarifications**
@@ -208,25 +220,27 @@ Commitment requires passing **both** phases in the same round.
 
 Each replica `i` independently evaluates the leader’s proposal and emits a prepare vote:
 
-\[
-prepare_i^r \in \{\text{ACCEPT}, \text{REJECT}\}
-\]
+$$
+prepare_i^r \in \{\mathrm{ACCEPT}, \mathrm{REJECT}\}
+$$
 
 Votes are weighted by trust:
 
-\[
-W_{\text{prepare}} = \sum_{i : prepare_i^r = \text{ACCEPT}} w_i
-\]
+$$
+W_{\mathrm{prepare}} = \sum_{i : prepare_i^r = \mathrm{ACCEPT}} w_i
+$$
 
 Let:
-\[
-W_{\text{total}} = \sum_i w_i
-\]
+
+$$
+W_{\mathrm{total}} = \sum_i w_i
+$$
 
 **Prepare threshold**
-\[
-W_{\text{prepare}} \ge \frac{2}{3} \cdot W_{\text{total}}
-\]
+
+$$
+W_{\mathrm{prepare}} \ge \frac{2}{3} \cdot W_{\mathrm{total}}
+$$
 
 - If the threshold is **not met**, the protocol:
   - does **not** commit,
@@ -241,19 +255,21 @@ Executed **only if** the Prepare phase succeeds.
 
 Each replica `i` emits a commit vote:
 
-\[
-commit_i^r \in \{\text{ACCEPT}, \text{REJECT}\}
-\]
+$$
+commit_i^r \in \{\mathrm{ACCEPT}, \mathrm{REJECT}\}
+$$
 
 Weighted support:
-\[
-W_{\text{commit}} = \sum_{i : commit_i^r = \text{ACCEPT}} w_i
-\]
+
+$$
+W_{\mathrm{commit}} = \sum_{i : commit_i^r = \mathrm{ACCEPT}} w_i
+$$
 
 **Commit threshold**
-\[
-W_{\text{commit}} \ge \frac{2}{3} \cdot W_{\text{total}}
-\]
+
+$$
+W_{\mathrm{commit}} \ge \frac{2}{3} \cdot W_{\mathrm{total}}
+$$
 
 - If satisfied:
   - `p_{\text{lead}}^r` is **committed**,
@@ -310,9 +326,10 @@ No agentic evaluators by default.
 ### 3.2 Selection Function
 
 Each round:
-\[
-p^{*r} = \operatorname*{arg\,max}_{p \in P_r} \text{plurality}(p)
-\]
+
+$$
+p^{*r} = \underset{p \in P_r}{\arg\max}\; \mathrm{plurality}(p)
+$$
 
 No trust weighting inside `S`.
 
@@ -336,9 +353,10 @@ Let `H_r` track consecutive identical selections:
 ### 3.5 Commit Predicate
 
 Commit iff:
-\[
+
+$$
 H_r \ge \beta
-\]
+$$
 
 Default:
 - `β = 2`
@@ -384,3 +402,4 @@ This configuration:
 Any additional protocol variants would **increase cost without adding new explanatory power**.
 
 This file defines the **final, locked-down protocol layer** for experiments.
+
