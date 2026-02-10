@@ -1,12 +1,17 @@
-# Consensus-Mechanism Instantiations
+# consensus_system.md
+**Consensus-Mechanism Instantiations (Locked Experimental Protocol Layer)**
+
+This file defines the **final, executable consensus protocols** used in experiments.
+It assumes the global system model, memory taxonomy, and access regimes are defined elsewhere.
+Nothing in this file introduces new memory artifacts or adaptive protocol behavior.
 
 ---
 
 ## 0. Shared Assumptions Across All Families
 
-### 0.1 Intra-Round Ordering
+### 0.1 Intra-Round Phase Ordering (Authoritative)
 
-Each round `r` executes the following **fixed order**:
+Each round `r` executes the following **fixed, linear sequence**:
 
 1. **Proposal Phase**
 2. **Interaction / Refinement Phase**
@@ -14,7 +19,11 @@ Each round `r` executes the following **fixed order**:
 4. **State Update Phase**
 5. **Decision Rule Evaluation**
 
-All memory writes occur **before** the decision rule, except where explicitly noted.
+There is **no branching or overlap** between phases.
+
+**Key invariant**
+- All memory writes (IM, SM, ES, RM) occur **before** the decision rule.
+- The decision rule is **read-only** over frozen state.
 
 ---
 
@@ -23,383 +32,345 @@ All memory writes occur **before** the decision rule, except where explicitly no
 At the end of **State Update Phase** in round `r`, the following objects are frozen:
 
 - **Proposal set**  
-  `P_r`: finalized proposals for round `r`
+  `P_r` — final proposals produced in round `r`
 
 - **Evaluation state**  
-  `ES[r]`: evaluator outputs over `P_r`
+  `ES[r]` — evaluator outputs over `P_r` (if evaluators exist in the family)
 
 - **Trust state**  
-  `RM`: per-agent trust weights (post-update for this round)
+  `RM` — post-update trust weights for round `r` (if used by the family)
 
-**Only these frozen objects may be consumed by the decision rule.**
+**Only these objects may be consumed by the decision rule.**
 
----
-
-### 0.3 Interaction Topology
-
-W fix **two** interaction topologies that
-span the behavior space observed in prior work.
-
-#### T1 — Centralized Star (Hub-and-Spoke)
-
-- One hub agent `h`
-- All agents communicate **only** with `h`
-- Hub aggregates and rebroadcasts
+No decision logic reads:
+- Interaction Memory (IM)
+- Summary Memory (SM)
+- Raw messages
+- Intermediate drafts
 
 ---
 
-#### T2 — Fully Connected Graph (Complete)
-- Every agent observes every other agent
+## 0.3 Interaction Topology (Explicit Synchronization With Phases)
+
+Topology controls **only the Interaction / Refinement Phase**.
+All other phases are topology-independent.
+
+### Why Interaction Exists at All
+
+Interaction is **not** required for voting or quorum logic.
+It exists to:
+- allow critique and refinement,
+- induce conformity or disagreement,
+- shape which proposals survive into `P_r`.
+
+Once `P_r` is frozen, topology is irrelevant.
+
+---
+
+### T1 — Centralized Star (Hub-and-Spoke)
+
+**Graph**
+- One distinguished hub agent `h`
+- All other agents connect only to `h`
+
+**Interaction Phase Semantics**
+- Each non-hub agent sends critiques/refinements to `h`
+- `h` aggregates and rebroadcasts a synthesized refinement
+- Non-hub agents do **not** observe each other directly
+
+**Evaluator implication**
+- There may be **multiple evaluators**, but:
+  - evaluators do **not** interact,
+  - evaluators only see `P_r` (and optionally `SM[r]`), never raw IM
+
+---
+
+### T2 — Fully Connected (Complete Graph)
+
+**Graph**
+- Every agent connects to every other agent
+
+**Interaction Phase Semantics**
+- All agents see all critiques and refinements
+- Refinement pressure is maximized
+- Conformity emerges fastest in this topology
+
+**Evaluator implication**
+- Same as T1: evaluators never participate in interaction
+
+---
+
+**Topology constraint**
+- Topology affects **what information flows during interaction**
+- Topology never changes:
+  - proposal freezing,
+  - evaluation logic,
+  - trust updates,
+  - decision predicates
 
 ---
 
 ## 1. Family 1 — Vote-Based Aggregation
 
-This family commits based on **per-round voting** over `P_r`.
+**One-round voting. No quorum memory. No persistence.**
+
 Commitment may occur in **any round**.
-
-### 1.1 Fixed Roles
-
-- **Proposers**: generate proposals forming `P_r`
-- **Voters**: cast ballots
-- **Vote Counter**: deterministic system module
 
 ---
 
-### 1.2 Ballot Object
+### 1.1 Roles
 
-Each voter `i` emits exactly one ballot:
+- **Proposers**  
+  Generate candidate proposals.
 
-$$
-vote_i^r \in P_r
-$$
+- **Voters**  
+  Cast exactly one vote each.
+
+- **Vote Counter**  
+  Deterministic system module (not an agent).
+
+---
+
+### 1.2 Phase Alignment
+
+| Phase | What Happens |
+|-----|-------------|
+| Proposal | Proposers generate candidates |
+| Interaction | Optional refinement (topology-dependent) |
+| Evaluation | *None* |
+| State Update | *None* |
+| Decision Rule | Votes are counted |
 
 ---
 
 ### 1.3 Variant A1 — Majority Voting (Unweighted)
 
-#### Commit Predicate (Round `r`)
+**Decision rule (round `r`)**
 
-Let:
+1. Each voter selects **one** proposal from `P_r`.
+2. Count votes per proposal.
+3. Select the proposal with the most votes.
+4. Commit **only if** it has a strict majority.
 
-$$
-count(p) = \left|\{\, i : vote_i^r = p \,\}\right|
-$$
+**Commit condition**
+- More than half of voters selected the same proposal.
 
-- Select:
+**If not met**
+- No commit.
+- Proceed to round `r+1`.
 
-$$
-p^{*r} = \underset{p}{\arg\max}\; count(p)
-$$
-
-  (deterministic tie-break)
-
-- **Commit** iff:
-
-$$
-count(p^{*r}) > |V_r| / 2
-$$
-
-If not satisfied, proceed to round `r+1`.
-
-#### Artifacts Read
+**Artifacts read**
 - `P_r`
-- Ballots `{vote_i^r}`
+- Ballots
 
-#### Artifacts Written
-- None required
+**Artifacts written**
+- None
 
-#### Evaluator
-A deterministic system module that counts each proposal's votes and outputs the highest-voted proposal. 
+**Evaluator**
+- Deterministic vote counter only.
 
 ---
 
 ### 1.4 Variant A2 — Trust-Weighted Voting
 
-Votes are weighted by trust weights from `RM`.
+Same as A1, except votes are **weighted by trust**.
 
-#### Weighted Tally
+**Decision rule (round `r`)**
 
-$$
-W(p) = \sum_{i: vote_i^r=p} w_i,\quad
-W_{total} = \sum_i w_i
-$$
+1. Each voter selects one proposal from `P_r`.
+2. Each vote contributes weight `w_i` from `RM`.
+3. Sum weights per proposal.
+4. Commit if one proposal reaches ≥ 50% of total trust weight.
 
-#### Commit Predicate
-
-- Select:
-
-$$
-p^{*r} = \underset{p}{\arg\max}\; W(p)
-$$
-
-- **Commit** iff:
-
-$$
-W(p^{*r}) \ge 0.5 \cdot W_{total}
-$$
-
-#### Artifacts Read
+**Artifacts read**
 - `P_r`
 - `RM`
-- Ballots `{vote_i^r}`
+- Ballots
 
-#### Artifacts Written
-- None required
+**Artifacts written**
+- None
 
-#### Evaluator
-- A deterministic system module that considers both a proposal's votes and the corresponding proposer to decide which proposal to output. 
+**Evaluator**
+- Deterministic weighted vote counter.
+- No agentic judgment or deliberation.
 
 ---
 
 ## 2. Family 2 — Weighted BFT-Style Commit Rules
 
-This family implements **leader nomination + weighted quorum voting**.
+**Leader nomination + weighted quorum voting.**
+
+Commitment requires **two explicit quorum checks** in the same round.
 
 ---
 
-### 2.1 Fixed Roles (Per Round `r`)
+### 2.1 Roles (Per Round)
 
-- **Leader** `ℓ_r`  
-  Exactly one agent designated as leader for round `r`.
+- **Leader**  
+  Exactly one agent, selected by trust.
 
 - **Replicas**  
-  All agents except `ℓ_r`.  
-  Replicas do not propose new candidates; they only vote on the leader’s nomination.
+  All non-leader agents.
 
 ---
 
-### 2.2 Leader Selection
+### 2.2 Phase Alignment
 
-- **Rotating leader (round-robin)**
-
-Leader identity is fixed deterministically as:
-
-$$
-\ell_r = (r \bmod N)
-$$
-
-- The leader selection rule is fixed for the entire task.
-- Leader identity does **not** depend on runtime behavior, votes, or trust updates.
+| Phase | What Happens |
+|-----|-------------|
+| Proposal | Proposers generate candidates |
+| Interaction | Refinement (topology-dependent) |
+| Evaluation | Evaluators score `P_r` |
+| State Update | RM updated |
+| Decision Rule | Leader nomination + quorum voting |
 
 ---
 
-### 2.3 Nomination Rule (Leader Action)
+### 2.3 Leader Selection
 
-At round `r`, the leader selects **exactly one** proposal from the frozen proposal set:
+At the **start of Decision Rule Evaluation**:
 
-$$
-p_{\mathrm{lead}}^r \in P_r
-$$
+- Leader is the agent with highest trust in `RM`.
+- Ties broken deterministically.
 
-**Nomination constraints**
-- Selection is **deterministic**.
-- Selection is a fixed function of the evaluation state:
-
-$$
-p_{\mathrm{lead}}^r = \underset{p \in P_r}{\arg\max}\; \mathrm{score}_{ES[r]}(p)
-$$
-
-(ties broken deterministically).
-
-**Important clarifications**
-- The leader does **not** modify proposals.
-- The leader does **not** aggregate votes.
-- The leader does **not** influence quorum thresholds.
-- The leader’s only authority is proposal nomination.
+Leader selection:
+- uses **only RM**,
+- is recomputed every round,
+- is not adaptive beyond trust updates.
 
 ---
 
-### 2.4 Two-Phase Weighted Commit Protocol
+### 2.4 Nomination Rule
 
-Commitment requires passing **both** phases in the same round.
+Leader selects **exactly one** proposal from `P_r`.
+
+Selection rule:
+- Deterministic.
+- Highest evaluator score in `ES[r]`.
+
+Leader has **no other powers**.
 
 ---
+
+### 2.5 Two-Phase Commit Logic
 
 #### Phase A — Prepare
 
-Each replica `i` independently evaluates the leader’s proposal and emits a prepare vote:
-
-$$
-prepare_i^r \in \{\mathrm{ACCEPT}, \mathrm{REJECT}\}
-$$
-
-Votes are weighted by trust:
-
-$$
-W_{\mathrm{prepare}} = \sum_{i : prepare_i^r = \mathrm{ACCEPT}} w_i
-$$
-
-Let:
-
-$$
-W_{\mathrm{total}} = \sum_i w_i
-$$
-
-**Prepare threshold**
-
-$$
-W_{\mathrm{prepare}} \ge \frac{2}{3} \cdot W_{\mathrm{total}}
-$$
-
-- If the threshold is **not met**, the protocol:
-  - does **not** commit,
-  - does **not** enter Phase B,
-  - proceeds to round `r+1`.
-
----
+- Each replica votes ACCEPT or REJECT.
+- Votes are weighted by trust.
+- If < 2/3 of total trust ACCEPT → round fails.
 
 #### Phase B — Commit
 
-Executed **only if** the Prepare phase succeeds.
-
-Each replica `i` emits a commit vote:
-
-$$
-commit_i^r \in \{\mathrm{ACCEPT}, \mathrm{REJECT}\}
-$$
-
-Weighted support:
-
-$$
-W_{\mathrm{commit}} = \sum_{i : commit_i^r = \mathrm{ACCEPT}} w_i
-$$
-
-**Commit threshold**
-
-$$
-W_{\mathrm{commit}} \ge \frac{2}{3} \cdot W_{\mathrm{total}}
-$$
-
-- If satisfied:
-  - `p_{\text{lead}}^r` is **committed**,
-  - the task terminates immediately.
-- If not satisfied:
-  - no commitment occurs,
-  - the task proceeds to round `r+1`.
+- Executed only if Prepare succeeds.
+- Same voting rule.
+- If ≥ 2/3 ACCEPT → commit and terminate task.
 
 ---
 
-### 2.5 Artifacts Read (Decision-Critical)
+### 2.6 Artifacts
 
-The commit predicate reads **only**:
+**Read**
+- `P_r`
+- `RM`
+- `ES[r]`
 
-- `P_r` — frozen proposal set
-- `RM` — trust weights (structural)
-- `ES[r]` — used **only** for leader nomination
-
-No other memory artifacts are consulted by the commit logic.
-
----
-
-### 2.6 Artifacts Written (Minimal Audit Set)
-
-The following artifacts are persisted for correctness auditing:
-
-- `Leader[r] = \ell_r`
-- `Nomination[r] = p_{\text{lead}}^r`
-- `PrepareVotes[r] = \{prepare_i^r\}`
-- `CommitVotes[r] = \{commit_i^r\}`
-
-These artifacts:
-- are written **after** their respective phases,
-- are not read by future rounds unless explicitly enabled for analysis,
-- are sufficient to reconstruct whether quorum conditions were met.
+**Written (audit only)**
+- Leader identity
+- Nomination
+- Prepare votes
+- Commit votes
 
 ---
 
 ## 3. Family 3 — Persistence-Based Finalization
 
-This family commits **only after stability across rounds**.
+**No voting. No quorum. No trust use.**
+
+Commitment depends on **stability across rounds**.
 
 ---
 
-### 3.1 Fixed Roles
+### 3.1 Roles
 
 - **Proposers**
 - **Stability Engine** (system module)
 
-No agentic evaluators by default.
+No evaluators by default.
 
 ---
 
-### 3.2 Selection Function
+### 3.2 Phase Alignment
+
+| Phase | What Happens |
+|-----|-------------|
+| Proposal | Proposals generated |
+| Interaction | Optional refinement |
+| Evaluation | *None* |
+| State Update | *None* |
+| Decision Rule | Stability check |
+
+---
+
+### 3.3 Canonical Selection
 
 Each round:
-
-$$
-p^{*r} = \underset{p \in P_r}{\arg\max}\; \mathrm{plurality}(p)
-$$
-
-No trust weighting inside `S`.
+- Select the proposal with the most proposer support.
+- Deterministic tie-breaking.
 
 ---
 
-### 3.3 Equivalence Relation
+### 3.4 Persistence Rule
 
-- **Exact match only**
-
----
-
-### 3.4 Persistence Counter
-
-Let `H_r` track consecutive identical selections:
-
-- If `p^{*r} = p^{*(r-1)}` → `H_r = H_{r-1} + 1`
-- Else → `H_r = 1`
-
----
-
-### 3.5 Commit Predicate
-
-Commit iff:
-
-$$
-H_r \ge \beta
-$$
+- Track how many consecutive rounds the same proposal is selected.
+- Commit once the same proposal appears for `β` consecutive rounds.
 
 Default:
 - `β = 2`
 
 ---
 
-### 3.6 Artifacts Read
-- `P_r`
-- Past `p^{*}` history
+### 3.5 Artifacts
 
-### 3.7 Artifacts Written
-- `Candidate[r]`
-- `H_r`
+**Read**
+- `P_r`
+- Previous selected proposal
+
+**Written**
+- Selected candidate
+- Persistence counter
 
 ---
 
-## 4. Final Experimental Scope
+## 4. Final Experimental Scope (Locked)
 
 ### What We Test
+
 - 3 consensus families
 - 2 interaction topologies (Star, Complete)
 - 3 access regimes (A, B, C)
-- Single-artifact and selected compound attacks (as defined elsewhere)
+- Single-artifact + selected compound attacks
 
-### What We Explicitly Do *Not* Test
-- Ring / expanding-ring diffusion
+### What We Do *Not* Test
+
+- Ring / expanding diffusion
 - Adaptive leader policies
 - Multiple equivalence metrics
 - Multiple quorum thresholds
-- Agentic evaluators inside vote counting
+- Agentic vote counting
 - Dynamic protocol switching
 
 ---
 
-## 5. Why This Is Enough
+## 5. Why This Design Is Sufficient
 
-This configuration:
-- Covers **direct voting**, **trust-weighted influence**, **quorum logic**, and **temporal persistence**
-- Preserves all **mechanistically distinct attack surfaces**
+This setup:
+- Spans **voting**, **trust-weighted influence**, **quorum consensus**, and **temporal stability**
+- Covers all **mechanistically distinct attack surfaces**
 - Avoids parameter explosion
-- Is feasible for a small, focused research team
+- Is feasible for a small, high-performing undergraduate team
 
-Any additional protocol variants would **increase cost without adding new explanatory power**.
+Any further protocol variants would increase cost without increasing explanatory power.
 
-This file defines the **final, locked-down protocol layer** for experiments.
+**This protocol layer is final and locked.**
 
