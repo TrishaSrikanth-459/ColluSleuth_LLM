@@ -1,4 +1,4 @@
-**Consensus-Mechanism Instantiations**
+# Consensus-Mechanism Instantiations
 
 ---
 
@@ -87,7 +87,7 @@ count(p) = |\{ i : vote_i^r = p \}|
 
 - Select:
   \[
-  p^{*r} = \arg\max_p count(p)
+  p^{*r} = \operatorname*{arg\,max}_p count(p)
   \]
   (deterministic tie-break)
 - **Commit** iff:
@@ -124,7 +124,7 @@ W_{total} = \sum_i w_i
 
 - Select:
   \[
-  p^{*r} = \arg\max_p W(p)
+  p^{*r} = \operatorname*{arg\,max}_p W(p)
   \]
 - **Commit** iff:
   \[
@@ -186,7 +186,7 @@ p_{\text{lead}}^r \in P_r
 - Selection is **deterministic**.
 - Selection is a fixed function of the evaluation state:
 \[
-p_{\text{lead}}^r = \arg\max_{p \in P_r} \text{score}_{ES[r]}(p)
+p_{\text{lead}}^r = \operatorname*{arg\,max}_{p \in P_r} \text{score}_{ES[r]}(p)
 \]
 (ties broken deterministically).
 
@@ -311,7 +311,7 @@ No agentic evaluators by default.
 
 Each round:
 \[
-p^{*r} = \arg\max_{p \in P_r} \text{plurality}(p)
+p^{*r} = \operatorname*{arg\,max}_{p \in P_r} \text{plurality}(p)
 \]
 
 No trust weighting inside `S`.
