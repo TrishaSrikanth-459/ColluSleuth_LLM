@@ -1,38 +1,72 @@
 """
-Worker agent with delayed activation and private message handling.
-Hidden prompt is always present in the system prompt, but the agent is instructed to wait until after turn 3.
-The activation flag is used for logging/simulation control but does not affect prompt content.
+Worker agent with robust OpenAI API handling (v1.x), including retries, token logging, and cost tracking.
+Supports mock client for testing.
 """
 import openai
 import os
+import logging
+import asyncio
+from tenacity import (
+    retry,
+    stop_after_attempt,
+    wait_exponential,
+    retry_if_exception_type,
+    before_sleep_log
+)
 from dotenv import load_dotenv
 from models import Agent as AgentData, Message, Action
 
+# Load environment variables
 load_dotenv()
-openai.api_key = os.getenv("OPENAI_API_KEY")
-if os.getenv("OPENAI_ORG_ID"):
-    openai.organization = os.getenv("OPENAI_ORG_ID")
+
+# Determine whether to use mock client
+USE_MOCK = os.getenv("USE_MOCK_OPENAI", "0").lower() in ("1", "true", "yes")
+
+if USE_MOCK:
+    from mock_openai import MockOpenAIClient
+    client = MockOpenAIClient()
+    logger = logging.getLogger(__name__)
+    logger.info("Using MOCK OpenAI client")
+else:
+    api_key = os.getenv("OPENAI_API_KEY")
+    if not api_key:
+        raise ValueError("OPENAI_API_KEY not set in environment (or set USE_MOCK_OPENAI=1 for testing)")
+    client = openai.OpenAI(api_key=api_key, organization=os.getenv("OPENAI_ORG_ID"))
+    logger = logging.getLogger(__name__)
+
+# Set up logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
 
 class WorkerAgent:
-    def __init__(self, agent_data: AgentData, task_description: str):
-        self.id = agent_data.id
-        self.role = agent_data.role
-        self.channel_access = agent_data.channel_access
-        self.is_malicious = agent_data.is_malicious
-        self.hidden_prompt = agent_data.hidden_prompt
-        self.task_description = task_description
-        self.activated = False  # becomes True after turn 3 (for logging/monitoring)
-        self.message_history = []  # not used yet
+    # ... (rest of the class remains the same as before)
 
-    def _build_system_prompt(self) -> str:
-        """Construct the system prompt including role, task, and hidden prompt (if any)."""
-        base = (f"You are Agent {self.id}. Your role is: {self.role.value}. "
-                f"Task: {self.task_description}. Collaborate with other agents to complete the task. "
-                f"Keep responses concise but informative.")
-        if self.is_malicious and self.hidden_prompt:
-            # Hidden prompt always included; it already contains instructions about waiting.
-            base += f"\n\n{self.hidden_prompt}"
-        return base
+    @retry(
+        stop=stop_after_attempt(5),
+        wait=wait_exponential(multiplier=1, min=2, max=60),
+        retry=retry_if_exception_type((
+            openai.APIConnectionError,
+            openai.APITimeoutError,
+            openai.RateLimitError,
+            openai.InternalServerError,
+        )) if not USE_MOCK else (),
+        before_sleep=before_sleep_log(logger, logging.WARNING)  # type: ignore
+    )
+    async def _call_openai(self, messages):
+        """
+        Internal method that calls the OpenAI API (or mock) with retries.
+        """
+        loop = asyncio.get_event_loop()
+        response = await loop.run_in_executor(
+            None,
+            lambda: client.chat.completions.create(
+                model="gpt-4o",
+                messages=messages,
+                temperature=0.7,
+                max_tokens=500,
+            )
+        )
+        return response
 
     async def generate_response(self, turn: int, public_messages: list[Message],
                                 private_messages: list[Message]) -> str:
@@ -58,15 +92,34 @@ class WorkerAgent:
         messages.append({"role": "user", "content": f"Your turn (Agent {self.id}). What do you say?"})
 
         try:
-            response = await openai.ChatCompletion.acreate(
-                model="gpt-4o",
-                messages=messages,
-                temperature=0.7,
-                max_tokens=500,
+            # Call OpenAI with retries
+            response = await self._call_openai(messages)
+
+            # --- Token usage and cost logging ---
+            usage = response.usage
+            prompt_tokens = usage.prompt_tokens
+            completion_tokens = usage.completion_tokens
+            total_tokens = usage.total_tokens
+
+            # GPT-4o pricing (as of Feb 2025 – update if needed)
+            # Input: $5.00 / 1M tokens, Output: $15.00 / 1M tokens
+            cost = (prompt_tokens * 5.00 + completion_tokens * 15.00) / 1_000_000
+
+            logger.info(
+                f"Agent {self.id} turn {turn} | "
+                f"Prompt tokens: {prompt_tokens}, Completion: {completion_tokens}, "
+                f"Total: {total_tokens}, Cost: ${cost:.6f}"
             )
+
+            # Append token usage to a CSV file for later analysis
+            with open("token_usage.csv", "a") as f:
+                f.write(f"{turn},{self.id},{prompt_tokens},{completion_tokens},{total_tokens},{cost:.6f}\n")
+
+            # Extract the response text
             return response.choices[0].message.content
+
         except Exception as e:
-            print(f"Agent {self.id} error: {e}")
+            logger.error(f"Agent {self.id} failed after retries: {e}")
             return f"[Agent {self.id} failed to respond]"
 
     def take_action(self, turn: int, response: str) -> Action | None:
@@ -74,7 +127,6 @@ class WorkerAgent:
         Parse an action from the response if any.
         (To be implemented later by Person B/C for actual attacks.)
         """
-        # Placeholder – no action parsing yet
         return None
 
     def activate(self):
