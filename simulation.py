@@ -61,7 +61,7 @@ class Simulation:
         """Run the simulation for total_turns."""
         while self.turn < self.total_turns:
             await self.run_turn()
-            # After turn 3, activate all malicious agents
+            # After turn 3, activate all malicious agents (for logging/monitoring)
             if self.turn == 3:
                 for agent in self.agents.values():
                     if agent.is_malicious:
