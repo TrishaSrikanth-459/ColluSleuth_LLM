@@ -48,18 +48,18 @@ For each task domain, a set of three roles is defined. Each role appears twice, 
 
 | Domain                     | Role       | Channel Access | Description |
 |----------------------------|------------|----------------|-------------|
-| **Knowledge QA**           | Researcher | none           | retrieves factual information |
-|                            | Analyst    | none           | evaluates and critiques information |
-|                            | Reporter   | none           | synthesises final answer |
-| **Math Reasoning**         | Calculator | none           | performs calculations |
-|                            | Checker    | none           | verifies steps |
-|                            | Integrator | none           | combines verified results |
-| **Code Synthesis**         | Engineer   | code           | writes Python code |
-|                            | Reviewer   | none           | reviews code for bugs |
-|                            | Manager    | none           | coordinates discussion |
-| **Web Application Interaction** | Planner    | none           | plans HTTP requests |
-|                            | Operator   | http           | executes HTTP requests |
-|                            | Validator  | none           | validates responses |
+| **Knowledge QA**           | Researcher | none           | Retrieves factual information |
+|                            | Analyst    | none           | Evaluates and critiques information |
+|                            | Reporter   | none           | Synthesises final answer |
+| **Math Reasoning**         | Calculator | none           | Performs calculations |
+|                            | Checker    | none           | Verifies steps |
+|                            | Integrator | none           | Combines verified results |
+| **Code Synthesis**         | Engineer   | code           | Writes Python code |
+|                            | Reviewer   | none           | Reviews code for bugs |
+|                            | Manager    | none           | Coordinates discussion |
+| **Web Application Interaction** | Planner    | none      | Plans HTTP requests |
+|                            | Operator   | http           | Executes HTTP requests |
+|                            | Validator  | none           | Validates responses |
 
 At the start of each run, workers are randomly assigned to the six slots. Malicious workers (0‑2) are then randomly chosen from the six.
 
