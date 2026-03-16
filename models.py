@@ -11,10 +11,6 @@ class Role(str, Enum):
     RESEARCHER = "researcher"
     ANALYST = "analyst"
     REPORTER = "reporter"
-    # Math Reasoning (optional, kept for completeness but not used in main experiments)
-    CALCULATOR = "calculator"
-    CHECKER = "checker"
-    INTEGRATOR = "integrator"
     # Code Synthesis
     ENGINEER = "engineer"
     REVIEWER = "reviewer"
@@ -22,7 +18,7 @@ class Role(str, Enum):
 
 class ChannelAccess(str, Enum):
     NONE = "none"
-    CODE = "code"   # only code execution
+    CODE = "code"
 
 class AttackType(str, Enum):
     NONE = "none"
@@ -71,7 +67,7 @@ class Message(BaseModel):
 class Action(BaseModel):
     turn: int
     agent_id: int
-    action_type: str      # 'code_submission' for code, 'final_answer' for QA
+    action_type: str      # 'code_submission' or 'final_answer'
     content: str          # code or answer text
     timestamp: float = None
 
