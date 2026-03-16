@@ -9,10 +9,11 @@ from agent import WorkerAgent
 from detector_agent import DetectorAgent
 from logger import Logger
 from permission_manager import PermissionManager
+import config
 
 class Simulation:
     def __init__(self, workers: List[WorkerAgent], detectors: List[DetectorAgent],
-                 total_turns: int = 10, experiment_id: str = "exp",
+                 total_turns: int = config.TOTAL_TURNS, experiment_id: str = "exp",
                  metadata: Dict[str, Any] = None, domain: str = None):
         self.workers = {a.id: a for a in workers}
         self.detectors = {d.id: d for d in detectors}
@@ -25,7 +26,7 @@ class Simulation:
         self.metadata = metadata or {}
         self.experiment_id = experiment_id
         self.domain = domain
-        self.logger = Logger(experiment_id, metadata, log_dir="logs")
+        self.logger = Logger(experiment_id, metadata, log_dir=config.LOG_DIR)
         self.permission_manager = PermissionManager()
         self.permission_manager.initialize_agents(list(self.workers.keys()))
 
@@ -92,7 +93,7 @@ class Simulation:
     async def run(self):
         while self.turn < self.total_turns:
             await self.run_turn()
-            if self.turn == 3:
+            if self.turn == config.ACTIVATION_TURN:
                 for agent in self.workers.values():
                     if agent.agent_data.is_malicious:
                         agent.activate()
