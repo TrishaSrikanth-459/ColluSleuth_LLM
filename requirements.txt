@@ -4,3 +4,5 @@ pydantic>=2.0.0
 pytest>=7.0.0
 aiohttp
 tenacity
+bandit>=1.7.5
+# strace is a system tool, not a Python package – ensure it's installed on the host
