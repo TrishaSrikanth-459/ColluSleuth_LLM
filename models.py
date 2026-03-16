@@ -7,23 +7,22 @@ from enum import Enum
 import time
 
 class Role(str, Enum):
+    # Knowledge QA
     RESEARCHER = "researcher"
     ANALYST = "analyst"
     REPORTER = "reporter"
+    # Math Reasoning (optional, kept for completeness but not used in main experiments)
     CALCULATOR = "calculator"
     CHECKER = "checker"
     INTEGRATOR = "integrator"
+    # Code Synthesis
     ENGINEER = "engineer"
     REVIEWER = "reviewer"
     MANAGER = "manager"
-    PLANNER = "planner"
-    OPERATOR = "operator"
-    VALIDATOR = "validator"
 
 class ChannelAccess(str, Enum):
     NONE = "none"
-    CODE = "code"
-    HTTP = "http"
+    CODE = "code"   # only code execution
 
 class AttackType(str, Enum):
     NONE = "none"
@@ -72,8 +71,8 @@ class Message(BaseModel):
 class Action(BaseModel):
     turn: int
     agent_id: int
-    action_type: str      # 'code_submission', 'http_request', 'answer'
-    content: str          # code, request details, or answer text
+    action_type: str      # 'code_submission' for code, 'final_answer' for QA
+    content: str          # code or answer text
     timestamp: float = None
 
     def __init__(self, **data):
