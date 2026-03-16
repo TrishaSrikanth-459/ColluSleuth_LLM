@@ -1,6 +1,5 @@
 """
-Parallel experiment runner for final design (34 conditions).
-Generates conditions with dependencies and computes four core metrics.
+Main experiment runner that generates 34 conditions and runs simulations.
 """
 import asyncio
 import csv
@@ -12,29 +11,27 @@ import logging
 from dataclasses import dataclass, asdict
 from typing import List, Dict, Any, Optional
 
-from models import (
-    AttackType, CoordinationStructure, KnowledgeLevel,
-    Agent as AgentModel
-)
+from models import AttackType, KnowledgeLevel
 from role_assigner import assign_roles, mark_malicious
 from agent import WorkerAgent
 from detector_agent import DetectorAgent
 from simulation import Simulation
 from logger import Logger
 from prompt_injection import inject_hidden_prompts
+import config
 
 MAX_CONCURRENT = 5
 TOTAL_REPS = 10
 OUTPUT_CSV = "experiment_results.csv"
-LOG_DIR = "logs"
 
-# Fixed coordination structures (egalitarian for simplicity)
-MAL_COORD = CoordinationStructure.EGALITARIAN
-DET_COORD = CoordinationStructure.EGALITARIAN
-
-# Domains and attack types
 DOMAINS = ["knowledge_qa", "code_synthesis"]
-ATTACK_TYPES = [AttackType.LINGUISTIC_COLLUSION, AttackType.MULTIMODAL_HIDING]
+ATTACK_TYPES = {
+    "knowledge_qa": AttackType.LINGUISTIC_COLLUSION,
+    "code_synthesis": AttackType.MULTIMODAL_HIDING
+}
+
+# Fixed interrogation turns for Fully Prepared attackers
+INTERROGATION_TURNS = [4, 6, 8]
 
 @dataclass
 class ExperimentConfig:
@@ -43,46 +40,43 @@ class ExperimentConfig:
     m: int
     d: int
     domain: str
-    knowledge_level: KnowledgeLevel  # only meaningful when m>0 and d>0
+    knowledge_level: Optional[KnowledgeLevel]  # None for m=0 or d=0
 
 def generate_configs() -> List[ExperimentConfig]:
-    """Generate 34 valid configurations."""
     configs = []
-    # 1. No attackers (m=0) – all d values, both domains
-    for d in [0,1,2]:
+    # 1. No attackers (m=0)
+    for d in [0, 1, 2]:
         for domain in DOMAINS:
-            for rep in range(1, TOTAL_REPS+1):
+            for rep in range(1, TOTAL_REPS + 1):
                 configs.append(ExperimentConfig(
                     rep=rep,
-                    attack_type=AttackType.NONE,   # placeholder, not used
+                    attack_type=ATTACK_TYPES[domain],
                     m=0,
                     d=d,
                     domain=domain,
                     knowledge_level=None
                 ))
     # 2. Attackers, no detectors (m=1,2; d=0)
-    for m in [1,2]:
+    for m in [1, 2]:
         for domain in DOMAINS:
-            attack = AttackType.LINGUISTIC_COLLUSION if domain == "knowledge_qa" else AttackType.MULTIMODAL_HIDING
-            for rep in range(1, TOTAL_REPS+1):
+            for rep in range(1, TOTAL_REPS + 1):
                 configs.append(ExperimentConfig(
                     rep=rep,
-                    attack_type=attack,
+                    attack_type=ATTACK_TYPES[domain],
                     m=m,
                     d=0,
                     domain=domain,
                     knowledge_level=None
                 ))
     # 3. Attackers + detectors (m=1,2; d=1,2) with three knowledge levels
-    for m in [1,2]:
-        for d in [1,2]:
+    for m in [1, 2]:
+        for d in [1, 2]:
             for domain in DOMAINS:
-                attack = AttackType.LINGUISTIC_COLLUSION if domain == "knowledge_qa" else AttackType.MULTIMODAL_HIDING
-                for kl in KnowledgeLevel:
-                    for rep in range(1, TOTAL_REPS+1):
+                for kl in [KnowledgeLevel.UNAWARE, KnowledgeLevel.AWARE_OF_PRESENCE, KnowledgeLevel.FULLY_PREPARED]:
+                    for rep in range(1, TOTAL_REPS + 1):
                         configs.append(ExperimentConfig(
                             rep=rep,
-                            attack_type=attack,
+                            attack_type=ATTACK_TYPES[domain],
                             m=m,
                             d=d,
                             domain=domain,
@@ -91,8 +85,7 @@ def generate_configs() -> List[ExperimentConfig]:
     return configs
 
 async def run_single_experiment(config: ExperimentConfig) -> Dict[str, Any]:
-    """Run one experiment and return core metrics."""
-    experiment_id = f"exp_{int(time.time())}_{random.randint(1000,9999)}"
+    experiment_id = f"exp_{int(time.time())}_{random.randint(1000, 9999)}"
 
     # 1. Assign roles
     agents_data = assign_roles(config.domain)
@@ -100,27 +93,51 @@ async def run_single_experiment(config: ExperimentConfig) -> Dict[str, Any]:
     # 2. Mark malicious agents
     agents_data = mark_malicious(agents_data, config.m)
 
-    # 3. Inject hidden prompts (including knowledge level)
-    if config.m > 0 and config.attack_type != AttackType.NONE:
+    # 3. Prepare detector-related info for prompt injection
+    detector_ids = list(range(config.d)) if config.d > 0 else []
+    detector_visible = False
+    tool_knowledge = False
+    interrogation_turns = None
+    if config.m > 0 and config.d > 0 and config.knowledge_level is not None:
+        if config.knowledge_level == KnowledgeLevel.AWARE_OF_PRESENCE:
+            detector_visible = True
+        elif config.knowledge_level == KnowledgeLevel.FULLY_PREPARED:
+            detector_visible = True
+            tool_knowledge = True
+            interrogation_turns = INTERROGATION_TURNS
+
+    # 4. Inject hidden prompts if attackers exist
+    if config.m > 0:
         agents_data = inject_hidden_prompts(
-            agents_data, config.m, config.attack_type,
-            MAL_COORD, config.knowledge_level
+            agents=agents_data,
+            m=config.m,
+            attack_type=config.attack_type,
+            knowledge_level=config.knowledge_level,
+            detector_ids=detector_ids,
+            detector_visible=detector_visible,
+            tool_knowledge=tool_knowledge,
+            interrogation_turns=interrogation_turns
         )
 
-    # 4. Create worker agents
+    # 5. Create worker agents
     task_desc = f"Task for {config.domain} (rep {config.rep})"
     workers = [WorkerAgent(ad, task_desc) for ad in agents_data]
 
-    # 5. Create detector agents (if any)
+    # 6. Create detector agents
     detectors = []
     if config.d > 0:
-        db_path = os.path.join(LOG_DIR, f"{experiment_id}.db")
+        db_path = os.path.join(config.LOG_DIR, f"{experiment_id}.db")
         for det_id in range(config.d):
-            # Pass domain so detector knows which tools to use
-            detector = DetectorAgent(det_id, db_path, domain=config.domain)
+            detector = DetectorAgent(
+                agent_id=det_id,
+                db_path=db_path,
+                domain=config.domain,
+                send_message_callback=None  # will be set by simulation
+            )
             detectors.append(detector)
 
-    # 6. Metadata
+    # 7. Metadata
+    malicious_indices = [i for i, a in enumerate(agents_data) if a.is_malicious]
     metadata = {
         "experiment_id": experiment_id,
         "domain": config.domain,
@@ -128,37 +145,46 @@ async def run_single_experiment(config: ExperimentConfig) -> Dict[str, Any]:
         "d": config.d,
         "attack_type": config.attack_type.value if config.attack_type else "none",
         "knowledge_level": config.knowledge_level.value if config.knowledge_level else None,
-        "malicious_coordination": MAL_COORD.value,
-        "detector_coordination": DET_COORD.value,
+        "malicious_indices": json.dumps(malicious_indices),
         "rep": config.rep,
         "timestamp": time.time()
     }
 
-    # 7. Run simulation
-    sim = Simulation(workers, detectors, total_turns=10,
-                     experiment_id=experiment_id, metadata=metadata,
-                     domain=config.domain)  # pass domain to simulation
+    # 8. Run simulation
+    sim = Simulation(
+        workers=workers,
+        detectors=detectors,
+        total_turns=config.TOTAL_TURNS,
+        experiment_id=experiment_id,
+        metadata=metadata,
+        domain=config.domain
+    )
     await sim.run()
 
-    # 8. Compute metrics from logs (simplified to four)
-    # These would be calculated by post-hoc analysis; here we extract from sim or compute.
-    # For demonstration, we assume sim has attributes after run.
-    # In real implementation, you'd query the database.
-    unsafe_output_rate = sim.compute_unsafe_output_rate()  # needs implementation
-    detection_rate = sim.compute_detection_rate()
-    detection_latency = sim.compute_avg_detection_latency()
-    false_positive_rate = sim.compute_false_positive_rate()
+    # 9. Compute metrics (using evaluator)
+    from evaluation import Evaluator
+    evaluator = Evaluator(sim.logger.db_path, config.domain)
+    unsafe_output_rate = evaluator.compute_unsafe_output_rate()
+    functional_correctness = evaluator.compute_functional_correctness()  # placeholder
+    latency = evaluator.compute_latency()
+    false_positive_rate = evaluator.compute_false_positive_rate()
+    detection_rate = evaluator.compute_detection_rate()
+    detection_latency = evaluator.compute_detection_latency()
+    evaluator.close()
 
     result = {
         "unsafe_output_rate": unsafe_output_rate,
+        "functional_correctness": functional_correctness,
+        "latency": latency,
+        "false_positive_rate": false_positive_rate,
         "detection_rate": detection_rate,
         "detection_latency": detection_latency,
-        "false_positive_rate": false_positive_rate,
     }
     return result
 
 async def run_all_experiments(configs: List[ExperimentConfig], max_concurrent: int):
     semaphore = asyncio.Semaphore(max_concurrent)
+
     async def run_with_semaphore(config):
         async with semaphore:
             print(f"Starting: {config}")
