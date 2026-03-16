@@ -35,7 +35,6 @@ class CoordinationStructure(str, Enum):
     HIERARCHICAL = "hierarchical"
 
 class KnowledgeLevel(str, Enum):
-    """What attackers know about the defense system."""
     UNAWARE = "unaware"
     AWARE_OF_PRESENCE = "aware_of_presence"
     FULLY_PREPARED = "fully_prepared"
@@ -52,7 +51,7 @@ class Agent(BaseModel):
     channel_access: ChannelAccess
     is_malicious: bool = False
     hidden_prompt: Optional[str] = None
-    knowledge_level: Optional[KnowledgeLevel] = None  # for attackers
+    knowledge_level: Optional[KnowledgeLevel] = None
 
     class Config:
         use_enum_values = True
@@ -73,8 +72,8 @@ class Message(BaseModel):
 class Action(BaseModel):
     turn: int
     agent_id: int
-    action_type: str      # e.g., 'code_submission', 'http_request'
-    content: str          # full code or HTTP request details
+    action_type: str      # 'code_submission', 'http_request', 'answer'
+    content: str          # code, request details, or answer text
     timestamp: float = None
 
     def __init__(self, **data):
@@ -88,7 +87,7 @@ class Recommendation(BaseModel):
     magnitude: Optional[float] = None
     confidence: float
     detector_ids: List[int]
-    evidence: str                    # New: must cite specific evidence
+    evidence: str                    # must cite specific evidence
     timestamp: float = None
 
     def __init__(self, **data):
