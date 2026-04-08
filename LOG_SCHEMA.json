@@ -4,8 +4,8 @@
     "m": 1,
     "d": 2,
     "attack_type": "linguistic_collusion",
-    "knowledge_level": "aware_of_presence",      // unaware, aware_of_presence, fully_prepared
-    "malicious_coordination": "egalitarian",     // fixed
-    "detector_coordination": "egalitarian",      // fixed
+    "knowledge_level": "aware_of_presence",
+    "malicious_coordination": "egalitarian",
+    "detector_coordination": "egalitarian",
     "timestamp": 1678901234.567
 }

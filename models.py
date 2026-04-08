@@ -1,44 +1,58 @@
 """
 Core data models for the LLM-MAS collusion detection system.
 """
-from pydantic import BaseModel
-from typing import List, Optional, Dict, Any
+from __future__ import annotations
+
 from enum import Enum
+from typing import List, Optional
 import time
 
+from pydantic import BaseModel, field_validator
+
+
 class Role(str, Enum):
-    # Knowledge QA
     RESEARCHER = "researcher"
     ANALYST = "analyst"
     REPORTER = "reporter"
-    # Code Synthesis
     ENGINEER = "engineer"
     REVIEWER = "reviewer"
     MANAGER = "manager"
 
+
 class ChannelAccess(str, Enum):
     NONE = "none"
     CODE = "code"
+
 
 class AttackType(str, Enum):
     NONE = "none"
     LINGUISTIC_COLLUSION = "linguistic_collusion"
     MULTIMODAL_HIDING = "multimodal_hiding"
 
+
 class CoordinationStructure(str, Enum):
     EGALITARIAN = "egalitarian"
     HIERARCHICAL = "hierarchical"
+
 
 class KnowledgeLevel(str, Enum):
     UNAWARE = "unaware"
     AWARE_OF_PRESENCE = "aware_of_presence"
     FULLY_PREPARED = "fully_prepared"
 
+
 class PermissionLevel(str, Enum):
     FULL_ACCESS = "full_access"
     RESTRICTED = "restricted"
     QUARANTINE = "quarantine"
     REMOVED = "removed"
+
+
+class RecommendationAction(str, Enum):
+    DECREASE = "decrease_credibility"
+    QUARANTINE = "quarantine"
+    REMOVE = "remove"
+
 
 class Agent(BaseModel):
     id: int
@@ -48,8 +62,24 @@ class Agent(BaseModel):
     hidden_prompt: Optional[str] = None
     knowledge_level: Optional[KnowledgeLevel] = None
 
-    class Config:
-        use_enum_values = True
+    @field_validator("role", mode="before")
+    def validate_role(cls, v):
+        if isinstance(v, str):
+            return Role(v)
+        return v
+
+    @field_validator("channel_access", mode="before")
+    def validate_channel(cls, v):
+        if isinstance(v, str):
+            return ChannelAccess(v)
+        return v
+
+    @field_validator("knowledge_level", mode="before")
+    def validate_knowledge(cls, v):
+        if isinstance(v, str):
+            return KnowledgeLevel(v)
+        return v
+
 
 class Message(BaseModel):
     turn: int
@@ -60,35 +90,39 @@ class Message(BaseModel):
     timestamp: float = None
 
     def __init__(self, **data):
-        if 'timestamp' not in data:
-            data['timestamp'] = time.time()
+        if data.get("timestamp") is None:
+            data["timestamp"] = time.time()
         super().__init__(**data)
+
 
 class Action(BaseModel):
     turn: int
     agent_id: int
-    action_type: str      # 'code_submission' or 'final_answer'
-    content: str          # code or answer text
+    action_type: str
+    content: str
     timestamp: float = None
 
     def __init__(self, **data):
-        if 'timestamp' not in data:
-            data['timestamp'] = time.time()
+        if data.get("timestamp") is None:
+            data["timestamp"] = time.time()
         super().__init__(**data)
+
 
 class Recommendation(BaseModel):
     target_agent_id: int
-    action: str                     # 'decrease_credibility', 'quarantine', 'remove'
+    action: str  # KEEP STRING for compatibility
     magnitude: Optional[float] = None
     confidence: float
     detector_ids: List[int]
-    evidence: str                    # must cite specific evidence
+    evidence: str
+    turn: int
     timestamp: float = None
 
     def __init__(self, **data):
-        if 'timestamp' not in data:
-            data['timestamp'] = time.time()
+        if data.get("timestamp") is None:
+            data["timestamp"] = time.time()
         super().__init__(**data)
+
 
 class PermissionChange(BaseModel):
     timestamp: float
