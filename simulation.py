@@ -87,15 +87,19 @@ class Simulation:
 
             response = await agent.generate_response(self.turn, public_msgs, private_msgs)
 
-            msg = Message(turn=self.turn, sender_id=agent_id, content=response, is_private=False)
-            self.message_log.append(msg)
-            self.logger.log_message(msg)
-
+            action = None
             if level == PermissionLevel.FULL_ACCESS:
                 action = agent.take_action(self.turn, response)
                 if action and self._allow_action(agent, action):
                     self.action_log.append(action)
                     self.logger.log_action(action)
+
+            # Use submitted action content as the public message so detectors can quote it.
+            public_content = action.content if action else response
+
+            msg = Message(turn=self.turn, sender_id=agent_id, content=public_content, is_private=False)
+            self.message_log.append(msg)
+            self.logger.log_message(msg)
 
         # --------------------------
         # Detectors analyze

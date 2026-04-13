@@ -248,13 +248,12 @@ class DetectorAgent:
         def _quote_matches(target_id: int, quote: str) -> bool:
             if not quote:
                 return False
-            msgs = self._last_seen_messages.get(target_id, [])
-            if not msgs:
-                return False
             qn = _normalize_text(quote)
-            for msg in msgs:
-                if qn and qn in _normalize_text(msg):
-                    return True
+            # allow match against any visible message to avoid over-constraining
+            for msgs in self._last_seen_messages.values():
+                for msg in msgs:
+                    if qn and qn in _normalize_text(msg):
+                        return True
             return False
 
         def _evidence_ok(evidence: str, target_id: int) -> bool:
@@ -310,17 +309,68 @@ class DetectorAgent:
     # ANALYSIS
     # ============================
 
-    def _maybe_execute_tool_reply(self, reply: Any, messages: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    async def _maybe_execute_tool_reply(self, reply: Any, messages: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
         if not isinstance(reply, dict):
             return None
+
+        def _parse_args(val: Any) -> Dict[str, Any]:
+            if val is None:
+                return {}
+            if isinstance(val, dict):
+                return val
+            if isinstance(val, str):
+                s = val.strip()
+                if not s:
+                    return {}
+                try:
+                    return json.loads(s)
+                except Exception:
+                    return {}
+            return {}
+
+        def _call_func(name: str, args: Dict[str, Any]) -> str:
+            func = self.autogen_agent._function_map.get(name)
+            if func is None:
+                return ""
+            try:
+                return func(**args)
+            except TypeError:
+                return func(args)
+
         if reply.get("tool_calls"):
             messages.append(reply)
-            _, tool_reply = self.autogen_agent.generate_tool_calls_reply(messages=messages)
+            tool_responses = []
+            for tool_call in reply.get("tool_calls", []):
+                function_call = tool_call.get("function", {})
+                name = function_call.get("name", "")
+                args = _parse_args(function_call.get("arguments"))
+                result = _call_func(name, args)
+                tool_responses.append({
+                    "tool_call_id": tool_call.get("id"),
+                    "role": "tool",
+                    "content": "" if result is None else str(result),
+                })
+            tool_reply = {
+                "role": "tool",
+                "tool_responses": tool_responses,
+                "content": "\n\n".join([tr.get("content", "") for tr in tool_responses]),
+            }
+            messages.append(tool_reply)
             return tool_reply
+
         if reply.get("function_call"):
             messages.append(reply)
-            _, tool_reply = self.autogen_agent.generate_function_call_reply(messages=messages)
+            func_call = reply.get("function_call", {})
+            name = func_call.get("name", "")
+            args = _parse_args(func_call.get("arguments"))
+            result = _call_func(name, args)
+            tool_reply = {
+                "role": "tool",
+                "content": "" if result is None else str(result),
+            }
+            messages.append(tool_reply)
             return tool_reply
+
         return None
 
     async def analyze(self, turn: int, public_messages: List[Message], private_messages: List[Message]) -> Optional[str]:
@@ -381,7 +431,7 @@ class DetectorAgent:
                 logger.error(f"Detector {self.id} error: {e}")
                 return None
 
-            tool_reply = self._maybe_execute_tool_reply(reply, messages)
+            tool_reply = await self._maybe_execute_tool_reply(reply, messages)
             if tool_reply is not None and self._last_recommendation:
                 return json.dumps(self._last_recommendation)
 
