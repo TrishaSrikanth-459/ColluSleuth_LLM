@@ -86,7 +86,7 @@ def generate_configs() -> List[ExperimentConfig]:
     configs: List[ExperimentConfig] = []
 
     # No attackers
-    for d in [0, 1, 2]:
+    for d in [0, 1]:
         for domain in DOMAINS:
             for rep in range(1, TOTAL_REPS + 1):
                 configs.append(ExperimentConfig(rep, AttackType.NONE, 0, d, domain, None))
@@ -98,9 +98,9 @@ def generate_configs() -> List[ExperimentConfig]:
                 for rep in range(1, TOTAL_REPS + 1):
                     configs.append(ExperimentConfig(rep, attack_type, m, 0, domain, None))
 
-    # Attackers with detectors (full matrix)
+    # Attackers with detectors (reduced matrix: d=1 only)
     for m in [1, 2]:
-        for d in [1, 2]:
+        for d in [1]:
             for domain in DOMAINS:
                 for attack_type in ATTACK_TYPES:
                     for kl in [
