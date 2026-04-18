@@ -51,10 +51,11 @@ class WorkerAgent:
 
     def _create_autogen_agent(self) -> ConversableAgent:
         system_message = self._build_system_prompt(False)
+        deployment_name = config.get_next_azure_openai_deployment()
 
         llm_config = {
             "config_list": [{
-                "model": config.AZURE_OPENAI_DEPLOYMENT,
+                "model": deployment_name,
                 "api_key": config.AZURE_OPENAI_API_KEY,
                 "api_type": "azure",
                 "base_url": config.AZURE_OPENAI_ENDPOINT,
@@ -64,7 +65,7 @@ class WorkerAgent:
             "max_tokens": config.MAX_TOKENS,
         }
 
-        if not config.AZURE_OPENAI_API_KEY or not config.AZURE_OPENAI_ENDPOINT:
+        if not config.AZURE_OPENAI_API_KEY or not config.AZURE_OPENAI_ENDPOINT or not deployment_name:
             logger.warning("Azure OpenAI config may be incomplete. Check env vars.")
 
         return ConversableAgent(
@@ -146,6 +147,7 @@ class WorkerAgent:
                 self._last_tool_error = "INVALID_PATCH_FORMAT"
                 return "INVALID_PATCH_FORMAT"
 
+            self._last_tool_error = None
             self._last_action = Action(
                 turn=-1,
                 agent_id=self.id,
@@ -163,6 +165,7 @@ class WorkerAgent:
                 self._last_tool_error = "INVALID_ANSWER"
                 return "INVALID_ANSWER"
 
+            self._last_tool_error = None
             self._last_action = Action(
                 turn=-1,
                 agent_id=self.id,
@@ -177,6 +180,7 @@ class WorkerAgent:
                 self._last_tool_error = "INVALID_MESSAGE"
                 return "INVALID_MESSAGE"
 
+            self._last_tool_error = None
             self._last_action = Action(
                 turn=-1,
                 agent_id=self.id,
@@ -223,7 +227,8 @@ class WorkerAgent:
                 if not s:
                     return {}
                 try:
-                    return json.loads(s)
+                    parsed = json.loads(s)
+                    return parsed if isinstance(parsed, dict) else {}
                 except Exception:
                     return {}
             return {}
@@ -231,11 +236,25 @@ class WorkerAgent:
         def _call_func(name: str, args: Dict[str, Any]) -> str:
             func = self.autogen_agent._function_map.get(name)
             if func is None:
-                return ""
+                self._last_tool_called = True
+                self._last_tool_error = f"UNKNOWN_TOOL:{name}"
+                return f"UNKNOWN_TOOL:{name}"
+
             try:
-                return func(**args)
+                result = func(**args)
+                return "" if result is None else str(result)
             except TypeError:
-                return func(args)
+                try:
+                    result = func(args)
+                    return "" if result is None else str(result)
+                except Exception as e:
+                    self._last_tool_called = True
+                    self._last_tool_error = f"TOOL_EXECUTION_ERROR:{name}:{e}"
+                    return f"TOOL_EXECUTION_ERROR:{name}:{e}"
+            except Exception as e:
+                self._last_tool_called = True
+                self._last_tool_error = f"TOOL_EXECUTION_ERROR:{name}:{e}"
+                return f"TOOL_EXECUTION_ERROR:{name}:{e}"
 
         if reply.get("tool_calls"):
             messages.append(reply)

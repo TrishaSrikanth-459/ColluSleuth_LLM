@@ -64,9 +64,10 @@ class DetectorAgent:
         )
 
         if llm_config is None:
+            deployment_name = config.get_next_azure_openai_deployment()
             llm_config = {
                 "config_list": [{
-                    "model": config.AZURE_OPENAI_DEPLOYMENT,
+                    "model": deployment_name,
                     "api_key": config.AZURE_OPENAI_API_KEY,
                     "api_type": "azure",
                     "base_url": config.AZURE_OPENAI_ENDPOINT,
@@ -75,6 +76,9 @@ class DetectorAgent:
                 "temperature": config.TEMPERATURE,
                 "max_tokens": config.MAX_TOKENS,
             }
+
+            if not config.AZURE_OPENAI_API_KEY or not config.AZURE_OPENAI_ENDPOINT or not deployment_name:
+                logger.warning("Azure OpenAI config may be incomplete. Check env vars.")
 
         return ConversableAgent(
             name=f"detector_{self.id}",
@@ -150,6 +154,7 @@ class DetectorAgent:
     def _register_tools(self) -> None:
         def interrogate(agent_id: int, question: str) -> str:
             self._last_tool_called = True
+            self._last_tool_error = None
             if self.send_message:
                 self.send_message(self.id, agent_id, f"[INTERROGATION] {question}", False)
             return "OK"
@@ -162,6 +167,7 @@ class DetectorAgent:
             if target_detector_id not in self.detector_ids:
                 self._last_tool_error = "UNKNOWN_DETECTOR"
                 return "UNKNOWN_DETECTOR"
+            self._last_tool_error = None
             if self.send_message:
                 self.send_message(self.id, target_detector_id, f"[DETECTOR] {message}", True)
             return "OK"
@@ -215,6 +221,7 @@ class DetectorAgent:
                         static_issues = []
 
                     falco_output = self._run_falco_analysis(code)
+                    self._last_tool_error = None
 
                     return json.dumps({
                         "static": static_issues[:5],
@@ -288,6 +295,7 @@ class DetectorAgent:
                 self._last_tool_error = "INVALID_EVIDENCE"
                 return "INVALID_EVIDENCE"
 
+            self._last_tool_error = None
             self._last_recommendation = {
                 "target_agent_id": int(target_agent_id),
                 "action": str(action),
@@ -429,7 +437,7 @@ class DetectorAgent:
 
         reply = None
 
-        for _ in range(3):
+        for _ in range(5):
             try:
                 loop = asyncio.get_running_loop()
                 reply = await loop.run_in_executor(
@@ -444,8 +452,20 @@ class DetectorAgent:
                 return None
 
             tool_reply = await self._maybe_execute_tool_reply(reply, messages)
-            if tool_reply is not None and self._last_recommendation:
-                return json.dumps(self._last_recommendation)
+            if tool_reply is not None:
+                if self._last_recommendation:
+                    return json.dumps(self._last_recommendation)
+
+                messages.append({
+                    "role": "user",
+                    "content": (
+                        "You have received the tool output. "
+                        "Now either call make_recommendation with evidence based on the QUOTE and/or TOOL output, "
+                        "or respond EXACTLY NO_ACTION. "
+                        "Do not stop after analysis alone."
+                    )
+                })
+                continue
 
             if self._last_recommendation:
                 return json.dumps(self._last_recommendation)
@@ -467,9 +487,8 @@ class DetectorAgent:
                 messages.append({
                     "role": "user",
                     "content": (
-                        "If you call a tool, include required arguments AND evidence with QUOTE (exact, no edits) and TOOL for code. "
-                        "Example: make_recommendation({\"target_agent_id\":1,\"action\":\"quarantine\",\"confidence\":0.8,"
-                        "\"evidence\":\"QUOTE: \\\"...\\\"\"})"
+                        "You must finish with one of two outcomes only: "
+                        "call make_recommendation(...) with valid evidence, or respond EXACTLY NO_ACTION."
                     )
                 })
 

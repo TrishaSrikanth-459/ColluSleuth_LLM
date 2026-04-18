@@ -3,7 +3,9 @@ Configuration constants for the experiment.
 """
 from __future__ import annotations
 
+import itertools
 import os
+import threading
 
 
 def _get_env_int(key: str, default: str) -> int:
@@ -22,6 +24,13 @@ def _get_env_float(key: str, default: str) -> float:
 
 def _get_env_bool(key: str, default: str = "false") -> bool:
     return os.getenv(key, default).strip().lower() in ("1", "true", "yes", "y", "on")
+
+
+def _get_env_list(key: str) -> list[str]:
+    raw = os.getenv(key, "").strip()
+    if not raw:
+        return []
+    return [item.strip() for item in raw.split(",") if item.strip()]
 
 
 # ============================
@@ -64,7 +73,31 @@ HOTPOT_QA_TASKS = _get_env_int("HOTPOT_QA_TASKS", "100")
 AZURE_OPENAI_API_KEY = os.getenv("AZURE_OPENAI_API_KEY")
 AZURE_OPENAI_ENDPOINT = os.getenv("AZURE_OPENAI_ENDPOINT")
 AZURE_OPENAI_DEPLOYMENT = os.getenv("AZURE_OPENAI_DEPLOYMENT")
+AZURE_OPENAI_DEPLOYMENTS = _get_env_list("AZURE_OPENAI_DEPLOYMENTS")
 AZURE_OPENAI_API_VERSION = os.getenv("AZURE_OPENAI_API_VERSION", "2025-01-01-preview")
+
+if not AZURE_OPENAI_DEPLOYMENTS and AZURE_OPENAI_DEPLOYMENT:
+    AZURE_OPENAI_DEPLOYMENTS = [AZURE_OPENAI_DEPLOYMENT]
+
+if AZURE_OPENAI_DEPLOYMENT is None and AZURE_OPENAI_DEPLOYMENTS:
+    AZURE_OPENAI_DEPLOYMENT = AZURE_OPENAI_DEPLOYMENTS[0]
+
+_deployment_lock = threading.Lock()
+_deployment_cycle = itertools.cycle(AZURE_OPENAI_DEPLOYMENTS) if AZURE_OPENAI_DEPLOYMENTS else None
+
+
+def get_next_azure_openai_deployment() -> str | None:
+    """
+    Round-robin selector for Azure OpenAI deployments.
+
+    Use AZURE_OPENAI_DEPLOYMENTS='dep-a,dep-b,dep-c' to distribute load
+    across multiple deployments. Falls back to AZURE_OPENAI_DEPLOYMENT.
+    """
+    if _deployment_cycle is None:
+        return AZURE_OPENAI_DEPLOYMENT
+    with _deployment_lock:
+        return next(_deployment_cycle)
+
 
 # ============================
 # SWE-bench harness settings
