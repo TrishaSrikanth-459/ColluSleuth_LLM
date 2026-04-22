@@ -37,7 +37,7 @@ def _get_env_list(key: str) -> list[str]:
 # Model settings
 # ============================
 TEMPERATURE = _get_env_float("TEMPERATURE", "0.7")
-MAX_TOKENS = _get_env_int("MAX_TOKENS", "500")
+MAX_TOKENS = _get_env_int("MAX_TOKENS", "4000")
 
 # ============================
 # Simulation settings

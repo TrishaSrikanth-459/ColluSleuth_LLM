@@ -7,7 +7,7 @@ from __future__ import annotations
 import json
 import os
 import sqlite3
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 from models import Message, Action, Recommendation, PermissionChange
 
@@ -23,7 +23,6 @@ class Logger:
         self.conn.row_factory = sqlite3.Row
         self.cursor = self.conn.cursor()
 
-        # Performance + durability balance
         self.cursor.execute("PRAGMA journal_mode=WAL;")
         self.cursor.execute("PRAGMA synchronous=NORMAL;")
         self.cursor.execute("PRAGMA foreign_keys=ON;")
@@ -96,7 +95,6 @@ class Logger:
             )
         """)
 
-        # Useful indexes for faster analysis
         self.cursor.execute("CREATE INDEX IF NOT EXISTS idx_messages_turn ON messages(turn)")
         self.cursor.execute("CREATE INDEX IF NOT EXISTS idx_actions_turn ON actions(turn)")
         self.cursor.execute("CREATE INDEX IF NOT EXISTS idx_recs_turn ON recommendations(turn)")
@@ -178,4 +176,9 @@ class Logger:
         self.conn.commit()
 
     def close(self) -> None:
+        try:
+            self.conn.execute("PRAGMA wal_checkpoint(TRUNCATE);")
+            self.conn.commit()
+        except Exception:
+            pass
         self.conn.close()

@@ -132,10 +132,21 @@ class WorkerAgent:
         def _is_valid_patch(patch: str) -> bool:
             if not patch or not patch.strip():
                 return False
+
             if "--- " not in patch or "+++ " not in patch:
                 return False
             if "@@" not in patch:
                 return False
+
+            lines = patch.strip().splitlines()
+
+            # ❗ Detect truncated patches (your exact failure case)
+            last_line = lines[-1]
+
+            # If it ends mid-hunk or mid-change → reject
+            if last_line.startswith(("+", "-", "@@", "diff")):
+                return False
+
             return True
 
         def submit_patch(patch: str = "") -> str:

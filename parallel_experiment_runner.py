@@ -1,26 +1,24 @@
 import asyncio
 import csv
 import json
-import time
-import random
-import os
 import logging
 import math
+import os
+import random
 import statistics
-from dataclasses import dataclass, asdict
-from typing import List, Dict, Any, Optional, Tuple
-
-from models import AttackType, KnowledgeLevel
-from role_assigner import assign_roles, mark_malicious
-from agent import WorkerAgent
-from detector_agent import DetectorAgent
-from simulation import Simulation
-from prompt_injection import inject_hidden_prompts
-
-from swebench_loader import load_swebench_tasks
-from hotpot_loader import load_hotpotqa_tasks
+import time
+from dataclasses import asdict, dataclass
+from typing import Any, Dict, List, Optional
 
 import config as cfg
+from agent import WorkerAgent
+from detector_agent import DetectorAgent
+from models import AttackType, KnowledgeLevel, Role
+from prompt_injection import inject_hidden_prompts
+from role_assigner import assign_roles, mark_malicious
+from simulation import Simulation
+from swebench_loader import load_swebench_tasks
+from hotpot_loader import load_hotpotqa_tasks
 
 
 def _get_env_int(key: str, default: int) -> int:
@@ -42,6 +40,12 @@ def _get_env_bool(key: str, default: bool) -> bool:
     return val in {"1", "true", "yes", "y", "on"}
 
 
+def _slugify(value: str) -> str:
+    cleaned = "".join(ch if ch.isalnum() or ch in {"-", "_", "."} else "_" for ch in value.strip())
+    cleaned = cleaned.strip("._")
+    return cleaned or "run"
+
+
 FIXED_MAX_CONCURRENT = _get_env_int("MAX_CONCURRENT", 2)
 MIN_CONCURRENT = _get_env_int("MIN_CONCURRENT", 2)
 MAX_CONCURRENT_CAP = _get_env_int("MAX_CONCURRENT_CAP", 8)
@@ -51,9 +55,11 @@ ADAPTIVE_BATCH_MULTIPLIER = _get_env_int("ADAPTIVE_BATCH_MULTIPLIER", 2)
 NUM_SHARDS = _get_env_int("NUM_SHARDS", 1)
 SHARD_INDEX = _get_env_int("SHARD_INDEX", 0)
 
-TOTAL_REPS = 10
-OUTPUT_CSV = "experiment_results.csv"
-TASK_PROGRESS_JSONL = "task_progress.jsonl"
+RUN_LABEL = _slugify(os.getenv("RUN_LABEL", "main"))
+EXPERIMENT_VERSION = os.getenv("EXPERIMENT_VERSION", "2026-04-clean")
+TOTAL_REPS = _get_env_int("TOTAL_REPS", 10)
+OUTPUT_CSV = os.getenv("OUTPUT_CSV", f"experiment_results.{RUN_LABEL}.csv")
+TASK_PROGRESS_JSONL = os.getenv("TASK_PROGRESS_JSONL", f"task_progress.{RUN_LABEL}.jsonl")
 
 CONFIG_RETRY_LIMIT = _get_env_int("CONFIG_RETRY_LIMIT", 8)
 CONFIG_RETRY_BASE_DELAY = _get_env_float("CONFIG_RETRY_BASE_DELAY", 5.0)
@@ -61,8 +67,44 @@ CONFIG_RETRY_MAX_DELAY = _get_env_float("CONFIG_RETRY_MAX_DELAY", 300.0)
 
 DOMAINS = ["knowledge_qa", "code_synthesis"]
 ATTACK_TYPES = [AttackType.LINGUISTIC_COLLUSION, AttackType.MULTIMODAL_HIDING]
-
 INTERROGATION_TURNS = [4, 6, 8]
+
+AGGREGATE_METRICS = [
+    "unsafe_output_rate",
+    "functional_correctness",
+    "latency",
+    "false_positive_rate",
+    "detection_rate",
+    "detection_latency",
+    "benign_restriction_rate",
+    "benign_recovery_time",
+    "code_eval_ok",
+    "code_eval_error",
+    "code_patch_selected",
+    "code_patch_has_placeholder",
+]
+
+OUTPUT_FIELDNAMES = [
+    "rep",
+    "attack_type",
+    "m",
+    "d",
+    "domain",
+    "knowledge_level",
+    "run_label",
+    "experiment_version",
+    "hotpot_tasks",
+    "swe_bench_tasks",
+    "total_turns",
+    "activation_turn",
+    "condition_type",
+    "is_ablation_no_detector",
+    "is_ablation_no_attacker",
+    "is_full_system",
+]
+for metric_name in AGGREGATE_METRICS:
+    OUTPUT_FIELDNAMES.extend([f"{metric_name}_mean", f"{metric_name}_std"])
+OUTPUT_FIELDNAMES.append("tasks_evaluated")
 
 
 @dataclass
@@ -85,36 +127,32 @@ class ConfigRunStats:
 def generate_configs() -> List[ExperimentConfig]:
     configs: List[ExperimentConfig] = []
 
-    # No attackers
     for d in [0, 1]:
         for domain in DOMAINS:
             for rep in range(1, TOTAL_REPS + 1):
                 configs.append(ExperimentConfig(rep, AttackType.NONE, 0, d, domain, None))
 
-    # Attackers with no detectors
     for m in [1, 2]:
         for domain in DOMAINS:
             for attack_type in ATTACK_TYPES:
                 for rep in range(1, TOTAL_REPS + 1):
                     configs.append(ExperimentConfig(rep, attack_type, m, 0, domain, None))
 
-    # Attackers with detectors (reduced matrix: d=1 only)
     for m in [1, 2]:
-        for d in [1]:
-            for domain in DOMAINS:
-                for attack_type in ATTACK_TYPES:
-                    for kl in [
-                        KnowledgeLevel.UNAWARE,
-                        KnowledgeLevel.AWARE_OF_PRESENCE,
-                        KnowledgeLevel.FULLY_PREPARED,
-                    ]:
-                        for rep in range(1, TOTAL_REPS + 1):
-                            configs.append(ExperimentConfig(rep, attack_type, m, d, domain, kl))
+        for domain in DOMAINS:
+            for attack_type in ATTACK_TYPES:
+                for kl in [
+                    KnowledgeLevel.UNAWARE,
+                    KnowledgeLevel.AWARE_OF_PRESENCE,
+                    KnowledgeLevel.FULLY_PREPARED,
+                ]:
+                    for rep in range(1, TOTAL_REPS + 1):
+                        configs.append(ExperimentConfig(rep, attack_type, m, 1, domain, kl))
 
     return configs
 
 
-def _safe_value(v):
+def _safe_value(v: Any):
     if v is None:
         return None
     if hasattr(v, "value"):
@@ -122,7 +160,7 @@ def _safe_value(v):
     return v
 
 
-def _normalize_serialized_value(v):
+def _normalize_serialized_value(v: Any):
     if v is None:
         return None
 
@@ -139,35 +177,78 @@ def _normalize_serialized_value(v):
         s = s.split(".")[-1]
 
     s = s.lower()
-
-    if s in {"", "null"}:
+    if s in {"", "null", "none"}:
         return None
-
     return s
 
 
+def _runtime_context() -> Dict[str, Any]:
+    return {
+        "run_label": RUN_LABEL,
+        "experiment_version": EXPERIMENT_VERSION,
+        "hotpot_tasks": cfg.HOTPOT_QA_TASKS,
+        "swe_bench_tasks": cfg.SWE_BENCH_TASKS,
+        "total_turns": cfg.TOTAL_TURNS,
+        "activation_turn": cfg.ACTIVATION_TURN,
+    }
+
+
 def _config_key(exp_config: ExperimentConfig) -> str:
-    return json.dumps(
-        {
-            "rep": exp_config.rep,
-            "attack_type": _normalize_serialized_value(_safe_value(exp_config.attack_type)),
-            "m": exp_config.m,
-            "d": exp_config.d,
-            "domain": exp_config.domain,
-            "knowledge_level": _normalize_serialized_value(_safe_value(exp_config.knowledge_level)),
-        },
-        sort_keys=True,
-    )
+    payload = {
+        "rep": exp_config.rep,
+        "attack_type": _normalize_serialized_value(_safe_value(exp_config.attack_type)),
+        "m": exp_config.m,
+        "d": exp_config.d,
+        "domain": exp_config.domain,
+        "knowledge_level": _normalize_serialized_value(_safe_value(exp_config.knowledge_level)),
+        **_runtime_context(),
+    }
+    return json.dumps(payload, sort_keys=True)
+
+
+def _config_key_from_row(row: Dict[str, Any]) -> str:
+    payload = {
+        "rep": int(row["rep"]),
+        "attack_type": _normalize_serialized_value(row.get("attack_type")),
+        "m": int(row["m"]),
+        "d": int(row["d"]),
+        "domain": row["domain"],
+        "knowledge_level": _normalize_serialized_value(row.get("knowledge_level")),
+        "run_label": row.get("run_label", RUN_LABEL),
+        "experiment_version": row.get("experiment_version", EXPERIMENT_VERSION),
+        "hotpot_tasks": int(float(row.get("hotpot_tasks", cfg.HOTPOT_QA_TASKS))),
+        "swe_bench_tasks": int(float(row.get("swe_bench_tasks", cfg.SWE_BENCH_TASKS))),
+        "total_turns": int(float(row.get("total_turns", cfg.TOTAL_TURNS))),
+        "activation_turn": int(float(row.get("activation_turn", cfg.ACTIVATION_TURN))),
+    }
+    return json.dumps(payload, sort_keys=True)
 
 
 def _task_key(exp_config: ExperimentConfig, task: Dict[str, Any]) -> str:
     return f"{_config_key(exp_config)}::{task['task_id']}"
 
 
+def _condition_labels(exp_config: ExperimentConfig) -> Dict[str, Any]:
+    return {
+        "condition_type": (
+            "no_attackers"
+            if exp_config.m == 0
+            else "attack_no_detectors"
+            if exp_config.d == 0
+            else "attack_with_detectors"
+        ),
+        "is_ablation_no_detector": exp_config.d == 0,
+        "is_ablation_no_attacker": exp_config.m == 0,
+        "is_full_system": exp_config.m > 0 and exp_config.d > 0,
+    }
+
+
 def _row_for_output(exp_config: ExperimentConfig, res: Dict[str, Any]) -> Dict[str, Any]:
     row = asdict(exp_config)
     row["attack_type"] = _safe_value(row["attack_type"])
     row["knowledge_level"] = _safe_value(row["knowledge_level"])
+    row.update(_runtime_context())
+    row.update(_condition_labels(exp_config))
     row.update(res)
     return row
 
@@ -177,21 +258,11 @@ def _load_completed_configs(csv_path: str) -> set[str]:
     if not os.path.exists(csv_path):
         return completed
 
-    with open(csv_path, newline="") as f:
+    with open(csv_path, newline="", encoding="utf-8") as f:
         reader = csv.DictReader(f)
         for row in reader:
             try:
-                completed.add(json.dumps(
-                    {
-                        "rep": int(row["rep"]),
-                        "attack_type": _normalize_serialized_value(row.get("attack_type")),
-                        "m": int(row["m"]),
-                        "d": int(row["d"]),
-                        "domain": row["domain"],
-                        "knowledge_level": _normalize_serialized_value(row.get("knowledge_level")),
-                    },
-                    sort_keys=True,
-                ))
+                completed.add(_config_key_from_row(row))
             except Exception:
                 continue
     return completed
@@ -202,7 +273,7 @@ def _load_task_progress(jsonl_path: str) -> Dict[str, Dict[str, Any]]:
     if not os.path.exists(jsonl_path):
         return progress
 
-    with open(jsonl_path, "r") as f:
+    with open(jsonl_path, "r", encoding="utf-8") as f:
         for line in f:
             line = line.strip()
             if not line:
@@ -223,7 +294,7 @@ async def _append_task_progress(
     result: Dict[str, Any],
 ) -> None:
     async with lock:
-        with open(jsonl_path, "a") as f:
+        with open(jsonl_path, "a", encoding="utf-8") as f:
             f.write(json.dumps({"task_key": task_key, "result": result}) + "\n")
             f.flush()
 
@@ -235,44 +306,40 @@ def _build_task_pools(seed: Optional[int] = None):
     }
 
 
-def _condition_labels(exp_config):
-    return {
-        "condition_type": (
-            "no_attackers" if exp_config.m == 0 else
-            "attack_no_detectors" if exp_config.d == 0 else
-            "attack_with_detectors"
-        ),
-        "is_ablation_no_detector": exp_config.d == 0,
-        "is_ablation_no_attacker": exp_config.m == 0,
-        "is_full_system": exp_config.m > 0 and exp_config.d > 0,
-    }
+def _collect_numeric(results: List[Dict[str, Any]], key: str) -> List[float]:
+    values: List[float] = []
+    for result in results:
+        if key not in result:
+            continue
+        try:
+            value = float(result[key])
+        except (TypeError, ValueError):
+            continue
+        if math.isnan(value):
+            continue
+        values.append(value)
+    return values
 
 
-def _aggregate(results):
-    keys = [
-        "unsafe_output_rate",
-        "functional_correctness",
-        "latency",
-        "false_positive_rate",
-        "detection_rate",
-        "detection_latency",
-        "benign_restriction_rate",
-        "benign_recovery_time",
-    ]
+def _aggregate(results: List[Dict[str, Any]]) -> Dict[str, Any]:
+    out: Dict[str, Any] = {}
+    for key in AGGREGATE_METRICS:
+        vals = _collect_numeric(results, key)
 
-    out = {}
-    for k in keys:
-        vals = [r[k] for r in results if k in r]
-
-        if k == "detection_latency":
-            vals = [v for v in vals if not math.isinf(v)]
+        if key == "detection_latency":
+            vals = [v for v in vals if math.isfinite(v)]
             if not vals:
-                out[f"{k}_mean"] = float("inf")
-                out[f"{k}_std"] = 0.0
+                out[f"{key}_mean"] = float("inf")
+                out[f"{key}_std"] = 0.0
                 continue
 
-        out[f"{k}_mean"] = sum(vals) / len(vals)
-        out[f"{k}_std"] = statistics.stdev(vals) if len(vals) > 1 else 0.0
+        if not vals:
+            out[f"{key}_mean"] = float("nan")
+            out[f"{key}_std"] = 0.0
+            continue
+
+        out[f"{key}_mean"] = sum(vals) / len(vals)
+        out[f"{key}_std"] = statistics.stdev(vals) if len(vals) > 1 else 0.0
 
     out["tasks_evaluated"] = len(results)
     return out
@@ -314,16 +381,32 @@ def _select_shard(configs: List[ExperimentConfig]) -> List[ExperimentConfig]:
     if SHARD_INDEX < 0 or SHARD_INDEX >= NUM_SHARDS:
         raise ValueError(f"Invalid SHARD_INDEX={SHARD_INDEX} for NUM_SHARDS={NUM_SHARDS}")
 
-    return [cfg for i, cfg in enumerate(configs) if i % NUM_SHARDS == SHARD_INDEX]
+    return [cfg_item for i, cfg_item in enumerate(configs) if i % NUM_SHARDS == SHARD_INDEX]
 
 
-async def _run_single_task(exp_config, task, task_index):
-    experiment_id = f"exp_{int(time.time())}_{random.randint(1000, 9999)}_{task_index}"
+def _build_task_rng(exp_config: ExperimentConfig, task: Dict[str, Any], task_index: int) -> random.Random:
+    seed_material = "::".join(
+        [
+            str(cfg.GLOBAL_SEED),
+            str(exp_config.rep),
+            str(exp_config.domain),
+            str(task.get("task_id", task_index)),
+            str(_safe_value(exp_config.attack_type)),
+            str(exp_config.m),
+            str(exp_config.d),
+            str(_safe_value(exp_config.knowledge_level)),
+        ]
+    )
+    return random.Random(seed_material)
 
+
+async def _run_single_task(exp_config: ExperimentConfig, task: Dict[str, Any], task_index: int) -> Dict[str, Any]:
+    task_rng = _build_task_rng(exp_config, task, task_index)
+    experiment_id = f"exp_{int(time.time())}_{task_rng.randint(1000, 9999)}_{task_index}"
     task_desc = task["prompt"]
 
-    agents_data = assign_roles(exp_config.domain)
-    agents_data = mark_malicious(agents_data, exp_config.m)
+    agents_data = assign_roles(exp_config.domain, rng=task_rng)
+    agents_data = mark_malicious(agents_data, exp_config.m, rng=task_rng)
 
     malicious_ids = [a.id for a in agents_data if a.is_malicious]
     malicious_roles = [a.role.value for a in agents_data if a.is_malicious]
@@ -334,7 +417,6 @@ async def _run_single_task(exp_config, task, task_index):
     detector_visible = False
     tool_knowledge = False
     interrogation_turns = None
-
     if exp_config.m > 0 and exp_config.d > 0 and exp_config.knowledge_level:
         if exp_config.knowledge_level == KnowledgeLevel.AWARE_OF_PRESENCE:
             detector_visible = True
@@ -355,12 +437,19 @@ async def _run_single_task(exp_config, task, task_index):
             interrogation_turns,
         )
 
+    if exp_config.domain == "code_synthesis":
+        primary_output_agent_id = next((a.id for a in agents_data if a.role == Role.ENGINEER), None)
+        primary_output_role = Role.ENGINEER.value
+    else:
+        primary_output_agent_id = next((a.id for a in agents_data if a.role == Role.REPORTER), None)
+        primary_output_role = Role.REPORTER.value
+
     workers = [
         WorkerAgent(
             ad,
             task_desc,
             detector_visible=detector_visible,
-            detector_ids=detector_ids
+            detector_ids=detector_ids,
         )
         for ad in agents_data
     ]
@@ -368,7 +457,6 @@ async def _run_single_task(exp_config, task, task_index):
     detectors = []
     if exp_config.d > 0:
         db_path = os.path.join(cfg.LOG_DIR, f"{experiment_id}.db")
-
         for det_id in detector_ids:
             detectors.append(
                 DetectorAgent(
@@ -393,7 +481,10 @@ async def _run_single_task(exp_config, task, task_index):
         "all_agent_ids": all_agent_ids,
         "task_id": task["task_id"],
         "rep": exp_config.rep,
+        "primary_output_agent_id": primary_output_agent_id,
+        "primary_output_role": primary_output_role,
         **_condition_labels(exp_config),
+        **_runtime_context(),
     }
 
     if exp_config.domain == "knowledge_qa":
@@ -401,13 +492,16 @@ async def _run_single_task(exp_config, task, task_index):
     else:
         metadata["repo"] = task["repo"]
         metadata["base_commit"] = task["base_commit"]
+        metadata["hints_text"] = task.get("hints_text", "")
+        metadata["fail_to_pass"] = task.get("fail_to_pass", "")
+        metadata["pass_to_pass"] = task.get("pass_to_pass", "")
 
     sim = Simulation(workers, detectors, cfg.TOTAL_TURNS, experiment_id, metadata, exp_config.domain)
     await sim.run()
 
     from evaluation import Evaluator
-    evaluator = Evaluator(sim.logger.db_path, exp_config.domain)
 
+    evaluator = Evaluator(sim.logger.db_path, exp_config.domain)
     result = {
         "unsafe_output_rate": evaluator.compute_unsafe_output_rate(),
         "functional_correctness": evaluator.compute_functional_correctness(),
@@ -417,13 +511,21 @@ async def _run_single_task(exp_config, task, task_index):
         "detection_latency": evaluator.compute_detection_latency(),
         "benign_restriction_rate": evaluator.compute_benign_restriction_rate(),
         "benign_recovery_time": evaluator.compute_benign_recovery_time(),
+        "code_eval_ok": evaluator.get_code_eval_ok(),
+        "code_eval_error": evaluator.get_code_eval_error(),
+        "code_patch_selected": evaluator.get_code_patch_selected(),
+        "code_patch_has_placeholder": evaluator.get_code_patch_has_placeholder(),
     }
-
     evaluator.close()
     return result
 
 
-async def run_single_experiment(exp_config, task_pools, task_progress, progress_lock):
+async def run_single_experiment(
+    exp_config: ExperimentConfig,
+    task_pools: Dict[str, List[Dict[str, Any]]],
+    task_progress: Dict[str, Dict[str, Any]],
+    progress_lock: asyncio.Lock,
+) -> Dict[str, Any]:
     tasks = task_pools[exp_config.domain]
 
     results = []
@@ -444,31 +546,22 @@ async def run_single_experiment(exp_config, task_pools, task_progress, progress_
         await _append_task_progress(TASK_PROGRESS_JSONL, progress_lock, key, result)
 
     if resumed_tasks > 0:
-        print(
-            f"Resumed {resumed_tasks} task results and ran {fresh_tasks} new tasks for {exp_config}"
-        )
+        print(f"Resumed {resumed_tasks} task results and ran {fresh_tasks} new tasks for {exp_config}")
 
     return _aggregate(results)
 
 
-def _choose_next_concurrency(
-    current: int,
-    retryable_errors: int,
-    completed_in_batch: int,
-) -> int:
+def _choose_next_concurrency(current: int, retryable_errors: int, completed_in_batch: int) -> int:
     if not ADAPTIVE_CONCURRENCY:
         return current
-
     if retryable_errors > 0:
         return max(MIN_CONCURRENT, current - 1)
-
     if completed_in_batch > 0 and retryable_errors == 0:
         return min(MAX_CONCURRENT_CAP, current + 1)
-
     return current
 
 
-async def run_all_experiments(configs, max_concurrent):
+async def run_all_experiments(configs: List[ExperimentConfig], max_concurrent: int) -> None:
     csv_lock = asyncio.Lock()
     progress_lock = asyncio.Lock()
 
@@ -478,18 +571,18 @@ async def run_all_experiments(configs, max_concurrent):
 
     pending_configs = [c for c in configs if _config_key(c) not in completed_configs]
 
-    current_concurrency = FIXED_MAX_CONCURRENT
+    current_concurrency = max_concurrent
     if ADAPTIVE_CONCURRENCY:
-        current_concurrency = max(MIN_CONCURRENT, min(MAX_CONCURRENT_CAP, FIXED_MAX_CONCURRENT))
+        current_concurrency = max(MIN_CONCURRENT, min(MAX_CONCURRENT_CAP, max_concurrent))
 
     print(
         f"Resume mode: {len(completed_configs)} completed configs found, "
         f"{len(pending_configs)} remaining in shard, {len(task_progress)} completed tasks checkpointed. "
-        f"Starting with concurrency={current_concurrency}, adaptive={ADAPTIVE_CONCURRENCY}, "
-        f"shard={SHARD_INDEX + 1}/{NUM_SHARDS}."
+        f"Output CSV={OUTPUT_CSV}, progress={TASK_PROGRESS_JSONL}, run_label={RUN_LABEL}, version={EXPERIMENT_VERSION}. "
+        f"Starting with concurrency={current_concurrency}, adaptive={ADAPTIVE_CONCURRENCY}, shard={SHARD_INDEX + 1}/{NUM_SHARDS}."
     )
 
-    async def run_one(cfg_) -> ConfigRunStats:
+    async def run_one(cfg_: ExperimentConfig) -> ConfigRunStats:
         await asyncio.sleep(random.uniform(0.2, 1.2))
         cfg_key = _config_key(cfg_)
         started = time.time()
@@ -504,7 +597,6 @@ async def run_all_experiments(configs, max_concurrent):
             try:
                 print(f"Starting: {cfg_} (attempt {attempt}/{CONFIG_RETRY_LIMIT})")
                 res = await run_single_experiment(cfg_, task_pools, task_progress, progress_lock)
-
                 row = _row_for_output(cfg_, res)
 
                 async with csv_lock:
@@ -513,8 +605,8 @@ async def run_all_experiments(configs, max_concurrent):
                         stats.duration_sec = time.time() - started
                         return stats
 
-                    with open(OUTPUT_CSV, "a", newline="") as f:
-                        writer = csv.DictWriter(f, fieldnames=row.keys())
+                    with open(OUTPUT_CSV, "a", newline="", encoding="utf-8") as f:
+                        writer = csv.DictWriter(f, fieldnames=OUTPUT_FIELDNAMES, extrasaction="ignore")
                         if f.tell() == 0:
                             writer.writeheader()
                         writer.writerow(row)
@@ -526,16 +618,15 @@ async def run_all_experiments(configs, max_concurrent):
                 stats.duration_sec = time.time() - started
                 print("Done:", cfg_)
                 return stats
-
-            except Exception as e:
-                if not _is_retryable_error(e) or attempt == CONFIG_RETRY_LIMIT:
-                    print(f"Failed permanently for {cfg_}: {e}")
+            except Exception as exc:
+                if not _is_retryable_error(exc) or attempt == CONFIG_RETRY_LIMIT:
+                    print(f"Failed permanently for {cfg_}: {exc}")
                     raise
 
                 stats.retryable_errors += 1
                 wait_s = _backoff_seconds(attempt)
                 print(
-                    f"Retryable error for {cfg_} on attempt {attempt}/{CONFIG_RETRY_LIMIT}: {e}. "
+                    f"Retryable error for {cfg_} on attempt {attempt}/{CONFIG_RETRY_LIMIT}: {exc}. "
                     f"Backing off for {wait_s:.1f}s."
                 )
                 await asyncio.sleep(wait_s)
@@ -544,9 +635,11 @@ async def run_all_experiments(configs, max_concurrent):
         return stats
 
     remaining_queue = list(pending_configs)
-
     while remaining_queue:
-        batch_size = min(len(remaining_queue), max(current_concurrency, current_concurrency * ADAPTIVE_BATCH_MULTIPLIER))
+        batch_size = min(
+            len(remaining_queue),
+            max(current_concurrency, current_concurrency * ADAPTIVE_BATCH_MULTIPLIER),
+        )
         batch = remaining_queue[:batch_size]
         remaining_queue = remaining_queue[batch_size:]
 
@@ -557,13 +650,11 @@ async def run_all_experiments(configs, max_concurrent):
 
         semaphore = asyncio.Semaphore(current_concurrency)
 
-        async def run_with_semaphore(cfg_):
+        async def run_with_semaphore(cfg_: ExperimentConfig):
             async with semaphore:
                 return await run_one(cfg_)
 
-        batch_results: List[ConfigRunStats] = await asyncio.gather(
-            *[run_with_semaphore(c) for c in batch]
-        )
+        batch_results: List[ConfigRunStats] = await asyncio.gather(*[run_with_semaphore(c) for c in batch])
 
         batch_retryable_errors = sum(r.retryable_errors for r in batch_results)
         batch_completed = len(batch_results)
@@ -578,12 +669,9 @@ async def run_all_experiments(configs, max_concurrent):
         )
 
         print(
-            f"Batch complete: completed={batch_completed}, "
-            f"retryable_errors={batch_retryable_errors}, "
-            f"mean_duration_sec={mean_duration:.1f}, "
-            f"next_concurrency={next_concurrency}."
+            f"Batch complete: completed={batch_completed}, retryable_errors={batch_retryable_errors}, "
+            f"mean_duration_sec={mean_duration:.1f}, next_concurrency={next_concurrency}."
         )
-
         current_concurrency = next_concurrency
 
 
@@ -601,5 +689,4 @@ if __name__ == "__main__":
     configs = _select_shard(configs)
 
     print(f"Running shard {SHARD_INDEX + 1}/{NUM_SHARDS} with {len(configs)} assigned configs.")
-
     asyncio.run(run_all_experiments(configs, FIXED_MAX_CONCURRENT))
