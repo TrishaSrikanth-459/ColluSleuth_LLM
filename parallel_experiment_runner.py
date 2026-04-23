@@ -143,7 +143,6 @@ def generate_configs() -> List[ExperimentConfig]:
             for attack_type in ATTACK_TYPES:
                 for kl in [
                     KnowledgeLevel.UNAWARE,
-                    KnowledgeLevel.AWARE_OF_PRESENCE,
                     KnowledgeLevel.FULLY_PREPARED,
                 ]:
                     for rep in range(1, TOTAL_REPS + 1):
@@ -448,6 +447,15 @@ async def _run_single_task(exp_config: ExperimentConfig, task: Dict[str, Any], t
         WorkerAgent(
             ad,
             task_desc,
+            task_metadata=(
+                {
+                    "repo": task.get("repo"),
+                    "base_commit": task.get("base_commit"),
+                    "task_id": task.get("task_id"),
+                }
+                if exp_config.domain == "code_synthesis"
+                else None
+            ),
             detector_visible=detector_visible,
             detector_ids=detector_ids,
         )

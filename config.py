@@ -64,8 +64,8 @@ RECOVERY_INCREMENT = _get_env_float("RECOVERY_INCREMENT", "0.1")
 # Benchmark task settings
 # ============================
 SWE_BENCH_PATH = os.getenv("SWE_BENCH_PATH", "data/swebench_verified")
-SWE_BENCH_TASKS = _get_env_int("SWE_BENCH_TASKS", "100")
-HOTPOT_QA_TASKS = _get_env_int("HOTPOT_QA_TASKS", "100")
+SWE_BENCH_TASKS = _get_env_int("SWE_BENCH_TASKS", "75")
+HOTPOT_QA_TASKS = _get_env_int("HOTPOT_QA_TASKS", "75")
 
 # ============================
 # Azure OpenAI settings
