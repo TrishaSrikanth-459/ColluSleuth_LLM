@@ -1,6 +1,6 @@
 # LLM-MAS Collusion Detection
 
-This project contains the knowledge-QA AutoGen experiment stack used for the original collaborative QA results. It focuses on conversational attack conditions (`none`, `linguistic_collusion`, and `multimodal_hiding`) together with trusted detector agents and post-hoc evaluation.
+This project contains the knowledge-QA AutoGen experiment stack used for the original collaborative QA results. It focuses on conversational attack conditions (`none`, `linguistic_collusion`) together with trusted detector agents and post-hoc evaluation.
 
 ## Setup
 
