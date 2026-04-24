@@ -1,11 +1,11 @@
 """
-Core data models for the LLM-MAS collusion detection system.
+Core data models for the LLM-MAS collaborative knowledge-QA study.
 """
 from __future__ import annotations
 
+import time
 from enum import Enum
 from typing import List, Optional
-import time
 
 from pydantic import BaseModel, field_validator
 
@@ -14,14 +14,10 @@ class Role(str, Enum):
     RESEARCHER = "researcher"
     ANALYST = "analyst"
     REPORTER = "reporter"
-    ENGINEER = "engineer"
-    REVIEWER = "reviewer"
-    MANAGER = "manager"
 
 
 class ChannelAccess(str, Enum):
     NONE = "none"
-    CODE = "code"
 
 
 class AttackType(str, Enum):
@@ -63,22 +59,22 @@ class Agent(BaseModel):
     knowledge_level: Optional[KnowledgeLevel] = None
 
     @field_validator("role", mode="before")
-    def validate_role(cls, v):
-        if isinstance(v, str):
-            return Role(v)
-        return v
+    def validate_role(cls, value):
+        if isinstance(value, str):
+            return Role(value)
+        return value
 
     @field_validator("channel_access", mode="before")
-    def validate_channel(cls, v):
-        if isinstance(v, str):
-            return ChannelAccess(v)
-        return v
+    def validate_channel(cls, value):
+        if isinstance(value, str):
+            return ChannelAccess(value)
+        return value
 
     @field_validator("knowledge_level", mode="before")
-    def validate_knowledge(cls, v):
-        if isinstance(v, str):
-            return KnowledgeLevel(v)
-        return v
+    def validate_knowledge(cls, value):
+        if isinstance(value, str):
+            return KnowledgeLevel(value)
+        return value
 
 
 class Message(BaseModel):
@@ -110,7 +106,7 @@ class Action(BaseModel):
 
 class Recommendation(BaseModel):
     target_agent_id: int
-    action: str  # KEEP STRING for compatibility
+    action: str
     magnitude: Optional[float] = None
     confidence: float
     detector_ids: List[int]

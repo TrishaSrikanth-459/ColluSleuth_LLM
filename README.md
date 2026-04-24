@@ -1,24 +1,32 @@
 # LLM-MAS Collusion Detection
 
-This project implements a multi-agent system with two attack paradigms (Linguistic Collusion and Multimodal Hiding) and a detection framework with trusted detector agents.
+This project contains the knowledge-QA AutoGen experiment stack used for the original collaborative QA results. It focuses on conversational attack conditions (`none`, `linguistic_collusion`, and `multimodal_hiding`) together with trusted detector agents and post-hoc evaluation.
 
 ## Setup
 
 1. Install dependencies: `pip install -r requirements.txt`
-2. Set environment variables: `OPENAI_API_KEY` and optionally `OPENAI_ORG_ID`
-3. Ensure `strace` is installed on the system (for dynamic analysis in code tasks)
-4. Run experiments: `python experiment_runner.py`
+2. Set Azure OpenAI environment variables in `.env` or your shell:
+   - `AZURE_OPENAI_API_KEY`
+   - `AZURE_OPENAI_ENDPOINT`
+   - `AZURE_OPENAI_DEPLOYMENT`
+   - `AZURE_OPENAI_API_VERSION`
+3. Run experiments: `python parallel_experiment_runner.py`
 
 ## Project Structure
 
-- `models.py`: Core data models
-- `role_assigner.py`: Role assignment for workers
-- `agent.py`: Worker agent implementation
-- `detector_agent.py`: Detector agent with interrogation and analysis tools
-- `permission_manager.py`: Non-LLM credibility manager
-- `simulation.py`: Main simulation engine
-- `prompt_injection.py`: Hidden prompt injection for attackers
-- `logger.py`: SQLite logging
-- `evaluation.py`: Post-hoc metric computation
-- `experiment_runner.py`: Condition generation and parallel execution
+- `models.py`: Core data models for workers, messages, actions, and detector recommendations
+- `role_assigner.py`: QA-only worker role assignment and malicious-agent marking
+- `agent.py`: AutoGen worker agent implementation
+- `detector_agent.py`: AutoGen detector agent implementation
+- `permission_manager.py`: Trusted credibility and permission-state manager
+- `simulation.py`: Multi-turn simulation engine and SQLite logging
+- `prompt_injection.py`: Hidden prompt injection for attacker conditions
+- `logger.py`: SQLite experiment logger
+- `evaluation.py`: Post-hoc QA metric computation
+- `parallel_experiment_runner.py`: Condition generation and parallel execution
+- `hotpot_loader.py`: HotpotQA task loading
 - `config.py`: Configuration constants
+
+## Scope
+
+This project is intentionally QA-only and is kept aligned with the collaborative knowledge-QA results workflow.
