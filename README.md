@@ -3,7 +3,7 @@
 This repository implements the experiment:  
 **Detecting Collusive Covert Attacks in LLM-Based Multi-Agent Systems**.
 
-The system runs decentralized HotpotQA discussions with benign workers, covert malicious workers, and optional trusted detector agents. Detectors use **interrogation-based analysis (Reid-style targeted questioning only)** and can quarantine suspicious workers through the existing permission manager.
+The system runs decentralized HotpotQA discussions with benign workers, covert malicious workers, and optional trusted detector agents. Detectors can quarantine suspicious workers through the existing permission manager.
 
 By default, nonzero-`m` attack conditions anchor one malicious role on the reporter/final-output agent and sample any remaining malicious workers from the rest of the pool. This makes the attack variable measure influence over the final answer rather than only low-impact side chatter. Set `ANCHOR_MALICIOUS_REPORTER=false` to sample all malicious workers uniformly at random.
 
