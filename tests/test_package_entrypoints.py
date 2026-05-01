@@ -8,8 +8,11 @@ import sys
 
 def test_packaged_entry_modules_import() -> None:
     run_module = import_module("covert_collusive_hotpot.run_experiments")
-    report_module = import_module("covert_collusive_hotpot.generate_paper_assets")
     assert callable(run_module.main)
+
+
+def test_reporting_entry_module_import() -> None:
+    report_module = import_module("covert_collusive_hotpot.generate_paper_assets")
     assert callable(report_module.main)
 
 
