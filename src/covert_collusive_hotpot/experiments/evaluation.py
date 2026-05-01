@@ -9,8 +9,8 @@ import sqlite3
 import time
 from typing import Any, Dict, List, Optional, Tuple
 
-from models import PermissionLevel, Recommendation
-from permission_manager import PermissionManager
+from covert_collusive_hotpot.core.models import PermissionLevel, Recommendation
+from covert_collusive_hotpot.core.permission_manager import PermissionManager
 
 
 class Evaluator:

@@ -9,13 +9,13 @@ import logging
 import re
 from typing import Any, Dict, List, Optional
 
-import config
-from agent import WorkerAgent
-from detector_agent import DetectorAgent
-from logger import Logger
-from models import Action, Message, PermissionLevel, Recommendation, Role
-from permission_manager import PermissionManager
-from rate_limiter import rate_limited_call
+from covert_collusive_hotpot.agents.detector import DetectorAgent
+from covert_collusive_hotpot.agents.worker import WorkerAgent
+from covert_collusive_hotpot.core import config
+from covert_collusive_hotpot.core.logging_store import Logger
+from covert_collusive_hotpot.core.models import Action, Message, PermissionLevel, Recommendation, Role
+from covert_collusive_hotpot.core.permission_manager import PermissionManager
+from covert_collusive_hotpot.core.rate_limiter import rate_limited_call
 
 logger = logging.getLogger(__name__)
 

@@ -6,8 +6,8 @@ from __future__ import annotations
 import random
 from typing import List, Optional
 
-import config
-from models import Agent, ChannelAccess, Role
+from covert_collusive_hotpot.core import config
+from covert_collusive_hotpot.core.models import Agent, ChannelAccess, Role
 
 
 QA_ROLE_PLAN = [

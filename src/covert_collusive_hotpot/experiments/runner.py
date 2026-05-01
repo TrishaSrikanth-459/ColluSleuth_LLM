@@ -26,15 +26,19 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-import config as cfg
-from agent import WorkerAgent
-from detector_agent import DetectorAgent
-from evaluation import Evaluator
-from hotpot_loader import load_hotpotqa_tasks
-from models import AttackType, KnowledgeLevel, Role
-from prompt_injection import inject_hidden_prompts
-from role_assigner import assign_roles, malicious_count_from_label, mark_malicious
-from simulation import Simulation
+from covert_collusive_hotpot.agents.detector import DetectorAgent
+from covert_collusive_hotpot.agents.worker import WorkerAgent
+from covert_collusive_hotpot.core import config as cfg
+from covert_collusive_hotpot.core.models import AttackType, KnowledgeLevel, Role
+from covert_collusive_hotpot.experiments.evaluation import Evaluator
+from covert_collusive_hotpot.experiments.hotpot_loader import load_hotpotqa_tasks
+from covert_collusive_hotpot.experiments.prompt_injection import inject_hidden_prompts
+from covert_collusive_hotpot.experiments.role_assignment import (
+    assign_roles,
+    malicious_count_from_label,
+    mark_malicious,
+)
+from covert_collusive_hotpot.experiments.simulation import Simulation
 
 
 def _get_env_int(key: str, default: int) -> int:

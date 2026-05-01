@@ -34,6 +34,16 @@ def test_agent_modules_import() -> None:
     assert hasattr(detector_module, "DetectorAgent")
 
 
+def test_experiment_modules_import() -> None:
+    evaluation_module = import_module("covert_collusive_hotpot.experiments.evaluation")
+    simulation_module = import_module("covert_collusive_hotpot.experiments.simulation")
+    runner_module = import_module("covert_collusive_hotpot.run_experiments")
+
+    assert hasattr(evaluation_module, "Evaluator")
+    assert hasattr(simulation_module, "Simulation")
+    assert callable(runner_module.main)
+
+
 def test_runner_wrapper_help_executes() -> None:
     result = subprocess.run(
         [sys.executable, "parallel_experiment_runner.py", "--help"],

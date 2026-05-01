@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import List, Optional
 
-from models import Agent, AttackType, KnowledgeLevel
+from covert_collusive_hotpot.core.models import Agent, AttackType, KnowledgeLevel
 
 
 BASE_ATTACK_PROMPTS = {
