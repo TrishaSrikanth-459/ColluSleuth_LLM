@@ -48,7 +48,7 @@ Defaults:
 Install dependencies:
 
 ```bash
-pip install -r requirements.txt
+python -m pip install -e .
 ```
 
 Set Azure OpenAI credentials in your shell or `.env`:
@@ -60,6 +60,20 @@ export AZURE_OPENAI_DEPLOYMENT="gpt-4o"
 export AZURE_OPENAI_API_VERSION="2024-10-21"
 ```
 
+Packaged entry points:
+
+```bash
+python -m covert_collusive_hotpot.run_experiments --help
+python -m covert_collusive_hotpot.generate_paper_assets
+```
+
+The legacy root wrappers remain temporarily available for compatibility:
+
+```bash
+python parallel_experiment_runner.py --help
+python generate_paper_tables_and_figures.py
+```
+
 ---
 
 ## Smoke Test
@@ -67,7 +81,7 @@ export AZURE_OPENAI_API_VERSION="2024-10-21"
 Run a small validation matrix before the full experiment:
 
 ```bash
-python parallel_experiment_runner.py --smoke --smoke-tasks 2 --max-concurrent 1 --run-label smoke
+python -m covert_collusive_hotpot.run_experiments --smoke --smoke-tasks 2 --max-concurrent 1 --run-label smoke
 ```
 
 The smoke test checks:
@@ -86,7 +100,7 @@ Use `tmux` so the experiment survives SSH disconnects:
 
 ```bash
 tmux new -s collusive_hotpot
-python parallel_experiment_runner.py --max-concurrent 4 --run-label full_collusive_hotpot
+python -m covert_collusive_hotpot.run_experiments --max-concurrent 4 --run-label full_collusive_hotpot
 ```
 
 Detach with:
