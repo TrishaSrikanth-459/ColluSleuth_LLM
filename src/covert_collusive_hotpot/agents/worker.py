@@ -11,9 +11,14 @@ from typing import Any, Dict, List, Optional
 from autogen import ConversableAgent
 from dotenv import load_dotenv
 
-import config
-from models import Action, Agent as AgentData, Message, Role
-from rate_limiter import rate_limited_call
+from covert_collusive_hotpot.core import config
+from covert_collusive_hotpot.core.models import (
+    Action,
+    Agent as AgentData,
+    Message,
+    Role,
+)
+from covert_collusive_hotpot.core.rate_limiter import rate_limited_call
 
 load_dotenv()
 logger = logging.getLogger(__name__)

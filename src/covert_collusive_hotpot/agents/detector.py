@@ -10,9 +10,9 @@ from typing import Any, Callable, Dict, List, Optional
 
 from autogen import ConversableAgent, register_function
 
-import config
-from models import Message
-from rate_limiter import rate_limited_call
+from covert_collusive_hotpot.core import config
+from covert_collusive_hotpot.core.models import Message
+from covert_collusive_hotpot.core.rate_limiter import rate_limited_call
 
 logger = logging.getLogger(__name__)
 _JSON_RE = re.compile(r"\{.*\}", re.DOTALL)

@@ -27,6 +27,13 @@ def test_core_modules_import() -> None:
     assert hasattr(limiter_module, "rate_limited_call")
 
 
+def test_agent_modules_import() -> None:
+    worker_module = import_module("covert_collusive_hotpot.agents.worker")
+    detector_module = import_module("covert_collusive_hotpot.agents.detector")
+    assert hasattr(worker_module, "WorkerAgent")
+    assert hasattr(detector_module, "DetectorAgent")
+
+
 def test_runner_wrapper_help_executes() -> None:
     result = subprocess.run(
         [sys.executable, "parallel_experiment_runner.py", "--help"],
