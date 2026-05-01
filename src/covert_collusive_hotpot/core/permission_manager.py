@@ -7,8 +7,12 @@ from __future__ import annotations
 from typing import Dict, List, Set
 import math
 
-from models import Recommendation, PermissionLevel, RecommendationAction
-import config
+from covert_collusive_hotpot.core import config
+from covert_collusive_hotpot.core.models import (
+    PermissionLevel,
+    Recommendation,
+    RecommendationAction,
+)
 
 
 class PermissionManager:

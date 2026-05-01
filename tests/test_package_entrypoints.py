@@ -13,6 +13,20 @@ def test_packaged_entry_modules_import() -> None:
     assert callable(report_module.main)
 
 
+def test_core_modules_import() -> None:
+    config_module = import_module("covert_collusive_hotpot.core.config")
+    models_module = import_module("covert_collusive_hotpot.core.models")
+    logger_module = import_module("covert_collusive_hotpot.core.logging_store")
+    permission_module = import_module("covert_collusive_hotpot.core.permission_manager")
+    limiter_module = import_module("covert_collusive_hotpot.core.rate_limiter")
+
+    assert config_module.MODEL_NAME
+    assert hasattr(models_module, "AttackType")
+    assert hasattr(logger_module, "Logger")
+    assert hasattr(permission_module, "PermissionManager")
+    assert hasattr(limiter_module, "rate_limited_call")
+
+
 def test_runner_wrapper_help_executes() -> None:
     result = subprocess.run(
         [sys.executable, "parallel_experiment_runner.py", "--help"],

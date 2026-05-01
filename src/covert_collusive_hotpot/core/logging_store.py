@@ -9,7 +9,12 @@ import os
 import sqlite3
 from typing import Any, Dict
 
-from models import Message, Action, Recommendation, PermissionChange
+from covert_collusive_hotpot.core.models import (
+    Action,
+    Message,
+    PermissionChange,
+    Recommendation,
+)
 
 
 class Logger:
