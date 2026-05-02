@@ -10,7 +10,6 @@ jobs:
       AZURE_OPENAI_API_KEY: ${{ secrets.AZURE_OPENAI_API_KEY }}
       AZURE_OPENAI_ENDPOINT: ${{ secrets.AZURE_OPENAI_ENDPOINT }}
       AZURE_OPENAI_DEPLOYMENT: ${{ secrets.AZURE_OPENAI_DEPLOYMENT }}
-      AZURE_OPENAI_API_VERSION: ${{ secrets.AZURE_OPENAI_API_VERSION }}
 
     steps:
       - name: Check out repository
@@ -34,3 +33,6 @@ jobs:
         run: |
           test -f experiment_results.ci_manual_smoke.csv
           test -f task_progress.ci_manual_smoke.jsonl
+          if [ -f failed_configs.ci_manual_smoke.csv ]; then
+            test ! -s failed_configs.ci_manual_smoke.csv
+          fi
