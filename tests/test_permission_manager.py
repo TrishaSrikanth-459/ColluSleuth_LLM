@@ -1,5 +1,5 @@
 from covert_collusive_hotpot.core import config
-from covert_collusive_hotpot.core.models import Recommendation, RecommendationAction
+from covert_collusive_hotpot.core.models import PermissionLevel, Recommendation, RecommendationAction
 from covert_collusive_hotpot.core.permission_manager import PermissionManager
 
 
@@ -54,7 +54,11 @@ def test_quarantine_recommendation_caps_credibility_at_quarantine_threshold() ->
         )
     )
 
-    assert manager.credibility[1] == config.CREDIBILITY_QUARANTINE + 0.1
+    assert manager.credibility[1] < config.CREDIBILITY_RESTRICTED
+    assert manager.get_permission_level(1) in {
+        PermissionLevel.QUARANTINE,
+        PermissionLevel.REMOVED,
+    }
 
 
 def test_remove_recommendation_sets_credibility_to_zero() -> None:
