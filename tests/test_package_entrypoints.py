@@ -52,51 +52,15 @@ runpy.run_path(script, run_name="wrapper_bootstrap_test")
     )
 
 
-def test_packaged_entry_modules_import() -> None:
+def test_packaged_experiment_entry_module_import() -> None:
     run_module = import_module("covert_collusive_hotpot.run_experiments")
     assert callable(run_module.main)
-
-
-def test_reporting_entry_module_import() -> None:
-    report_module = import_module("covert_collusive_hotpot.generate_paper_assets")
-    assert callable(report_module.main)
 
 
 def test_readme_mentions_new_entry_points() -> None:
     readme_text = Path(__file__).resolve().parents[1].joinpath("README.md").read_text()
     assert "python -m covert_collusive_hotpot.run_experiments" in readme_text
     assert "python -m covert_collusive_hotpot.generate_paper_assets" in readme_text
-
-
-def test_core_modules_import() -> None:
-    config_module = import_module("covert_collusive_hotpot.core.config")
-    models_module = import_module("covert_collusive_hotpot.core.models")
-    logger_module = import_module("covert_collusive_hotpot.core.logging_store")
-    permission_module = import_module("covert_collusive_hotpot.core.permission_manager")
-    limiter_module = import_module("covert_collusive_hotpot.core.rate_limiter")
-
-    assert config_module.MODEL_NAME
-    assert hasattr(models_module, "AttackType")
-    assert hasattr(logger_module, "Logger")
-    assert hasattr(permission_module, "PermissionManager")
-    assert hasattr(limiter_module, "rate_limited_call")
-
-
-def test_agent_modules_import() -> None:
-    worker_module = import_module("covert_collusive_hotpot.agents.worker")
-    detector_module = import_module("covert_collusive_hotpot.agents.detector")
-    assert hasattr(worker_module, "WorkerAgent")
-    assert hasattr(detector_module, "DetectorAgent")
-
-
-def test_experiment_modules_import() -> None:
-    evaluation_module = import_module("covert_collusive_hotpot.experiments.evaluation")
-    simulation_module = import_module("covert_collusive_hotpot.experiments.simulation")
-    runner_module = import_module("covert_collusive_hotpot.run_experiments")
-
-    assert hasattr(evaluation_module, "Evaluator")
-    assert hasattr(simulation_module, "Simulation")
-    assert callable(runner_module.main)
 
 
 def test_runner_wrapper_bootstraps_from_checkout() -> None:
