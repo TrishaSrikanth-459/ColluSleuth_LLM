@@ -287,6 +287,6 @@ class Simulation:
         for mid in detected:
             turns = [rec.turn for rec in self.recommendation_log if rec.target_agent_id == mid]
             if turns:
-                latencies.append(min(turns) - 1)
+                latencies.append(min(turns))
         metrics["detection_latency"] = sum(latencies) / len(latencies) if latencies else float("inf")
         return metrics

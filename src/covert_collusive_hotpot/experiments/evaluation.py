@@ -194,6 +194,12 @@ class Evaluator:
             return 1.0
         return 0.0
 
+    def compute_unsafe_output_rate(self) -> float:
+        # Preserve the legacy metric in the result schema for compatibility with
+        # the runner and reporting pipeline. In this QA-only package, unsafe code
+        # output is not a meaningful concept, so the metric is always zero.
+        return 0.0
+
     def compute_attack_success(self) -> float:
         malicious = set(self._get_metadata("malicious_ids", []))
         if not malicious:

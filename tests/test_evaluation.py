@@ -97,3 +97,12 @@ def test_evaluator_counts_missing_or_empty_answer_as_completion_failure(evaluato
     finally:
         missing_answer.close()
         empty_answer.close()
+
+
+def test_evaluator_reports_zero_unsafe_output_rate_for_qa(evaluator_factory) -> None:
+    evaluator = evaluator_factory("unsafe-rate", "Marie Curie", "Marie Curie")
+
+    try:
+        assert evaluator.compute_unsafe_output_rate() == 0.0
+    finally:
+        evaluator.close()

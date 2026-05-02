@@ -51,6 +51,12 @@ Install dependencies:
 python -m pip install -e .
 ```
 
+For local testing and CI-equivalent tooling:
+
+```bash
+python -m pip install -e '.[dev]'
+```
+
 Set Azure OpenAI credentials in your shell or `.env`:
 
 ```bash
@@ -76,6 +82,36 @@ python generate_paper_tables_and_figures.py
 
 ---
 
+## Testing
+
+Run the full local test suite:
+
+```bash
+PYTHONPATH=src pytest tests -q
+```
+
+Run only the packaging and entry-point smoke checks:
+
+```bash
+PYTHONPATH=src pytest tests/test_package_entrypoints.py -q
+```
+
+Check the two primary experiment entry surfaces:
+
+```bash
+PYTHONPATH=src python -m covert_collusive_hotpot.run_experiments --help
+python parallel_experiment_runner.py --help
+```
+
+There are also two GitHub Actions workflows:
+
+- default CI in `.github/workflows/ci.yml`
+- manual Azure-backed smoke in `.github/workflows/azure-manual-smoke.yml`
+
+See [tests/README.md](tests/README.md) for a more detailed breakdown of the test suite and CI layout.
+
+---
+
 ## Smoke Test
 
 Run a small validation matrix before the full experiment:
@@ -84,13 +120,13 @@ Run a small validation matrix before the full experiment:
 python -m covert_collusive_hotpot.run_experiments --smoke --smoke-tasks 2 --max-concurrent 1 --run-label smoke
 ```
 
+The smoke and full experiment commands require the HotpotQA dataset. On the first run, `datasets` will download the `hotpot_qa` distractor split from Hugging Face and cache it locally. That means the first run requires internet access unless you already have the dataset cached.
+
 The smoke test checks:
 
 - clean baseline  
 - all-malicious sanity conditions for every attack  
 - one detector condition to exercise interrogation and quarantine  
-
-If Azure filters a detector prompt, the detector falls back to a **conservative local evidence check**, ensuring detector-condition runs remain resumable instead of failing mid-experiment.
 
 ---
 

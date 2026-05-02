@@ -660,13 +660,15 @@ def parse_args() -> argparse.Namespace:
 
 
 def _apply_cli_overrides(args: argparse.Namespace) -> None:
-    global RUN_LABEL, OUTPUT_CSV, TASK_PROGRESS_JSONL, TOTAL_REPS
+    global RUN_LABEL, OUTPUT_CSV, TASK_PROGRESS_JSONL, FAILED_CONFIGS_CSV, TOTAL_REPS
     if args.run_label:
         RUN_LABEL = _slugify(args.run_label)
         if args.output_csv is None:
             OUTPUT_CSV = f"experiment_results.{RUN_LABEL}.csv"
         if args.task_progress_jsonl is None:
             TASK_PROGRESS_JSONL = f"task_progress.{RUN_LABEL}.jsonl"
+        if os.getenv("FAILED_CONFIGS_CSV") is None:
+            FAILED_CONFIGS_CSV = f"failed_configs.{RUN_LABEL}.csv"
     if args.output_csv:
         OUTPUT_CSV = args.output_csv
     if args.task_progress_jsonl:
