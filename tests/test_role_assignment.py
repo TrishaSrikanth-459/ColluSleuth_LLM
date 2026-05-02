@@ -15,6 +15,7 @@ def test_assign_roles_creates_exactly_one_reporter():
 
     reporter_count = sum(agent.role == Role.REPORTER for agent in agents)
 
+    assert len(agents) == 6
     assert reporter_count == 1
 
 
@@ -43,6 +44,8 @@ def test_mark_malicious_anchor_reporter_marks_reporter_malicious():
     )
 
     reporters = [agent for agent in marked_agents if agent.role == Role.REPORTER]
+    malicious_count = sum(agent.is_malicious for agent in marked_agents)
 
     assert len(reporters) == 1
+    assert malicious_count == 1
     assert reporters[0].is_malicious is True
