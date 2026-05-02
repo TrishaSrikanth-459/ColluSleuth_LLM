@@ -1,0 +1,36 @@
+name: Azure Manual Smoke
+
+on:
+  workflow_dispatch:
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    env:
+      AZURE_OPENAI_API_KEY: ${{ secrets.AZURE_OPENAI_API_KEY }}
+      AZURE_OPENAI_ENDPOINT: ${{ secrets.AZURE_OPENAI_ENDPOINT }}
+      AZURE_OPENAI_DEPLOYMENT: ${{ secrets.AZURE_OPENAI_DEPLOYMENT }}
+      AZURE_OPENAI_API_VERSION: ${{ secrets.AZURE_OPENAI_API_VERSION }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Upgrade pip
+        run: python -m pip install --upgrade pip
+
+      - name: Install package
+        run: python -m pip install -e .
+
+      - name: Run Azure smoke experiment
+        run: python -m covert_collusive_hotpot.run_experiments --smoke --smoke-tasks 1 --max-concurrent 1 --run-label ci_manual_smoke
+
+      - name: Verify smoke artifacts
+        run: |
+          test -f experiment_results.ci_manual_smoke.csv
+          test -f task_progress.ci_manual_smoke.jsonl
