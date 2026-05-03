@@ -4,6 +4,7 @@ from covert_collusive_hotpot.core.config import DEFAULT_DOMAIN
 from covert_collusive_hotpot.domains.base import DomainSpec
 
 
+_BOOTSTRAP_DEFAULT_DOMAIN = "knowledge_qa"
 _domain_registry: DomainRegistry | None = None
 
 
@@ -47,8 +48,10 @@ def get_domain_registry() -> DomainRegistry:
     if _domain_registry is None:
         from covert_collusive_hotpot.domains.knowledge_qa import KnowledgeQADomain
 
-        registry = DomainRegistry(default_domain=DEFAULT_DOMAIN)
-        registry.register(KnowledgeQADomain())
+        knowledge_qa = KnowledgeQADomain()
+        default_domain = DEFAULT_DOMAIN if DEFAULT_DOMAIN == knowledge_qa.name else _BOOTSTRAP_DEFAULT_DOMAIN
+        registry = DomainRegistry(default_domain=default_domain)
+        registry.register(knowledge_qa)
         _domain_registry = registry
 
     return _domain_registry

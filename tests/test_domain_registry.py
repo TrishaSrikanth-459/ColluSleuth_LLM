@@ -207,13 +207,14 @@ def test_config_uses_canonical_default_for_whitespace_domain(monkeypatch) -> Non
     assert module.DEFAULT_DOMAIN == "knowledge_qa"
 
 
-def test_global_registry_uses_shared_config_default_domain(monkeypatch) -> None:
+def test_global_registry_falls_back_to_registered_default_domain(monkeypatch) -> None:
     monkeypatch.setenv("DOMAIN", "code_synthesis")
     reload(cfg)
     module = reload(registry_module)
     registry = module.get_domain_registry()
 
-    assert registry.default_domain_name() == "code_synthesis"
+    assert registry.default_domain_name() == "knowledge_qa"
+    assert registry.default_domain().name == "knowledge_qa"
 
 
 def test_global_registry_default_is_canonical_after_override_tests() -> None:
