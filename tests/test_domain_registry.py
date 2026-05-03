@@ -6,7 +6,7 @@ from covert_collusive_hotpot.domains.base import (
     PromptInjectionContext,
     ReportingAdapter,
 )
-from covert_collusive_hotpot.domains.registry import DomainRegistry
+from covert_collusive_hotpot.domains.registry import DomainRegistry, get_domain_registry
 
 
 class DummyReportingAdapter:
@@ -154,3 +154,18 @@ def test_registry_rejects_missing_default_domain() -> None:
         assert "default" in str(exc).lower()
     else:
         raise AssertionError("Expected ValueError for missing default domain")
+
+
+def test_global_registry_defaults_to_knowledge_qa() -> None:
+    registry = get_domain_registry()
+
+    assert registry.default_domain_name() == "knowledge_qa"
+    assert "knowledge_qa" in registry.names()
+
+
+def test_knowledge_qa_domain_capabilities_are_exposed() -> None:
+    registry = get_domain_registry()
+    domain = registry.get("knowledge_qa")
+
+    assert domain.name == "knowledge_qa"
+    assert domain.capabilities.language_only_permissions is True
