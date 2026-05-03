@@ -7,7 +7,6 @@ import argparse
 import os
 from pathlib import Path
 
-from covert_collusive_hotpot.core import config
 from covert_collusive_hotpot.domains.base import ReportingAdapter
 from covert_collusive_hotpot.domains.registry import get_domain_registry
 from covert_collusive_hotpot.domains.knowledge_qa.reporting import load_results as _load_knowledge_qa_results
@@ -31,7 +30,7 @@ def resolve_domain_name(cli_value: str | None = None) -> str:
     selected = (selected or "").strip()
     if selected:
         return selected
-    return config.DEFAULT_DOMAIN
+    return get_domain_registry().default_domain_name()
 
 
 def load_results(path: str):

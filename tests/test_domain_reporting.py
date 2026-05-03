@@ -5,6 +5,7 @@ import pytest
 
 from covert_collusive_hotpot import generate_paper_assets as paper_assets
 from covert_collusive_hotpot.core import config as cfg
+from covert_collusive_hotpot.domains import registry as registry_module
 from covert_collusive_hotpot.domains.base import ReportingAdapter
 from covert_collusive_hotpot.domains.knowledge_qa.reporting import KnowledgeQAReportingAdapter
 
@@ -98,12 +99,11 @@ def restore_reporting_environment(monkeypatch):
     monkeypatch.delenv("REPORT_DOMAIN", raising=False)
     monkeypatch.delenv("DOMAIN", raising=False)
     reload(cfg)
+    reload(registry_module)
     reload(paper_assets)
 
 
-def test_resolve_domain_name_uses_config_default_and_env_with_cli_winning(monkeypatch) -> None:
-    monkeypatch.setattr(paper_assets.config, "DEFAULT_DOMAIN", "knowledge_qa")
-
+def test_resolve_domain_name_uses_registry_default_and_env_with_cli_winning(monkeypatch) -> None:
     assert paper_assets.resolve_domain_name() == "knowledge_qa"
 
     monkeypatch.setenv("REPORT_DOMAIN", "env_domain")
@@ -111,12 +111,20 @@ def test_resolve_domain_name_uses_config_default_and_env_with_cli_winning(monkey
     assert paper_assets.resolve_domain_name("cli_domain") == "cli_domain"
 
 
-def test_resolve_domain_name_falls_back_to_config_default_for_blank_values(monkeypatch) -> None:
-    monkeypatch.setattr(paper_assets.config, "DEFAULT_DOMAIN", "knowledge_qa")
+def test_resolve_domain_name_falls_back_to_registry_default_for_blank_values(monkeypatch) -> None:
     monkeypatch.setenv("REPORT_DOMAIN", "   ")
 
     assert paper_assets.resolve_domain_name() == "knowledge_qa"
     assert paper_assets.resolve_domain_name("   ") == "knowledge_qa"
+
+
+def test_resolve_domain_name_uses_registered_default_when_domain_env_is_unimplemented(monkeypatch) -> None:
+    monkeypatch.setenv("DOMAIN", "code_synthesis")
+    reload(cfg)
+    reload(registry_module)
+    reload(paper_assets)
+
+    assert paper_assets.resolve_domain_name() == "knowledge_qa"
 
 
 def test_resolve_reporting_adapter_returns_registry_backed_qa_adapter(tmp_path) -> None:

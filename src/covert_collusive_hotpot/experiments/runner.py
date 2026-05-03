@@ -701,7 +701,10 @@ def parse_args() -> argparse.Namespace:
 
 
 def _resolve_domain_name(args: argparse.Namespace) -> str:
-    return (args.domain or cfg.DEFAULT_DOMAIN).strip()
+    selected = (args.domain or "").strip()
+    if selected:
+        return selected
+    return get_domain_registry().default_domain_name()
 
 
 def _resolve_domain(args: argparse.Namespace):

@@ -157,3 +157,42 @@ def test_packaged_reporting_entry_point_executes_with_minimal_csv(tmp_path) -> N
     )
     assert result.returncode == 0
     assert (tmp_path / "tables" / "summary.csv").exists()
+
+
+def test_packaged_experiment_help_mentions_domain_flag() -> None:
+    result = subprocess.run(
+        [sys.executable, "-m", "covert_collusive_hotpot.run_experiments", "--help"],
+        cwd=Path(__file__).resolve().parents[1],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0
+    assert "--domain" in result.stdout
+
+
+def test_packaged_reporting_help_mentions_domain_flag() -> None:
+    result = subprocess.run(
+        [sys.executable, "-m", "covert_collusive_hotpot.generate_paper_assets", "--help"],
+        cwd=Path(__file__).resolve().parents[1],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0
+    assert "--domain" in result.stdout
+
+
+def test_legacy_experiment_wrapper_help_mentions_domain_flag() -> None:
+    result = subprocess.run(
+        [sys.executable, "parallel_experiment_runner.py", "--help"],
+        cwd=Path(__file__).resolve().parents[1],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0
+    assert "--domain" in result.stdout

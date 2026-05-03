@@ -40,7 +40,16 @@ def test_runner_only_calls_existing_evaluator_methods() -> None:
 
 
 def test_runner_defaults_to_registry_default_domain(monkeypatch) -> None:
-    monkeypatch.setattr(runner.cfg, "DEFAULT_DOMAIN", "knowledge_qa")
+    class FakeRegistry:
+        def default_domain_name(self) -> str:
+            return "knowledge_qa"
+
+        def get(self, name: str):
+            assert name == "knowledge_qa"
+            return type("Domain", (), {"name": name})()
+
+    monkeypatch.setattr(runner, "get_domain_registry", lambda: FakeRegistry())
+    monkeypatch.setattr(runner.cfg, "DEFAULT_DOMAIN", "code_synthesis")
 
     args = runner.build_arg_parser().parse_args([])
 
