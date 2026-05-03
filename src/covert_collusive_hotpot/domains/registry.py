@@ -9,6 +9,8 @@ class DomainRegistry:
         self._domains: dict[str, DomainSpec] = {}
 
     def register(self, domain: DomainSpec) -> None:
+        if domain.name in self._domains:
+            raise ValueError(f"Domain '{domain.name}' is already registered")
         self._domains[domain.name] = domain
 
     def get(self, name: str) -> DomainSpec:
@@ -25,4 +27,11 @@ class DomainRegistry:
         return self._default_domain_name
 
     def default_domain(self) -> DomainSpec:
-        return self.get(self._default_domain_name)
+        try:
+            return self._domains[self._default_domain_name]
+        except KeyError as exc:
+            supported = ", ".join(sorted(self._domains))
+            raise ValueError(
+                f"Default domain '{self._default_domain_name}' is not registered. "
+                f"Supported domains: {supported}"
+            ) from exc

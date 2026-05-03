@@ -1,5 +1,15 @@
-from covert_collusive_hotpot.domains.base import DomainCapabilities, DomainSpec
+from covert_collusive_hotpot.domains.base import (
+    DomainCapabilities,
+    DomainSpec,
+    PromptInjectionContext,
+    ReportingAdapter,
+)
 from covert_collusive_hotpot.domains.registry import DomainRegistry
+
+
+class DummyReportingAdapter:
+    def run(self) -> None:
+        return None
 
 
 class DummyDomain(DomainSpec):
@@ -15,21 +25,30 @@ class DummyDomain(DomainSpec):
     def assign_roles(self, rng):
         return []
 
-    def inject_prompts(
-        self,
-        agents,
-        m,
-        attack_type,
-        knowledge_level,
-        detector_ids,
-        detector_visible,
-        tool_knowledge,
-        interrogation_turns,
-    ):
+    def inject_prompts(self, agents, context: PromptInjectionContext):
+        assert isinstance(context, PromptInjectionContext)
         return agents
 
     def reporting_adapter(self):
-        return object()
+        return DummyReportingAdapter()
+
+
+def test_domain_spec_is_abstract() -> None:
+    try:
+        DomainSpec(
+            name="incomplete",
+            capabilities=DomainCapabilities(language_only_permissions=False),
+        )
+    except TypeError:
+        pass
+    else:
+        raise AssertionError("Expected DomainSpec instantiation to fail")
+
+
+def test_dummy_domain_reporting_adapter_satisfies_protocol() -> None:
+    domain = DummyDomain("knowledge_qa")
+
+    assert isinstance(domain.reporting_adapter(), ReportingAdapter)
 
 
 def test_registry_exposes_registered_domain_names() -> None:
@@ -48,6 +67,18 @@ def test_registry_returns_default_domain() -> None:
     assert registry.default_domain() is qa
 
 
+def test_registry_rejects_duplicate_domain_names() -> None:
+    registry = DomainRegistry(default_domain="knowledge_qa")
+    registry.register(DummyDomain("knowledge_qa"))
+
+    try:
+        registry.register(DummyDomain("knowledge_qa"))
+    except ValueError as exc:
+        assert "knowledge_qa" in str(exc)
+    else:
+        raise AssertionError("Expected ValueError for duplicate domain")
+
+
 def test_registry_rejects_unknown_domain() -> None:
     registry = DomainRegistry(default_domain="knowledge_qa")
     registry.register(DummyDomain("knowledge_qa"))
@@ -58,3 +89,16 @@ def test_registry_rejects_unknown_domain() -> None:
         assert "missing" in str(exc)
     else:
         raise AssertionError("Expected ValueError for unknown domain")
+
+
+def test_registry_rejects_missing_default_domain() -> None:
+    registry = DomainRegistry(default_domain="knowledge_qa")
+    registry.register(DummyDomain("dummy"))
+
+    try:
+        registry.default_domain()
+    except ValueError as exc:
+        assert "knowledge_qa" in str(exc)
+        assert "default" in str(exc).lower()
+    else:
+        raise AssertionError("Expected ValueError for missing default domain")
