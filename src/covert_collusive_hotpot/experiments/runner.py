@@ -226,7 +226,12 @@ def _task_key(exp_config: ExperimentConfig, task: Dict[str, Any]) -> str:
     return f"{_config_key(exp_config)}::{task['task_id']}"
 
 
-def generate_configs(total_reps: int = None, domain_name: str = cfg.DEFAULT_DOMAIN) -> List[ExperimentConfig]:
+def _default_domain_name() -> str:
+    return get_domain_registry().default_domain_name()
+
+
+def generate_configs(total_reps: int = None, domain_name: str | None = None) -> List[ExperimentConfig]:
+    selected_domain = domain_name or _default_domain_name()
     reps = total_reps or TOTAL_REPS
     configs: List[ExperimentConfig] = []
     for attack_type in ATTACK_TYPES:
@@ -238,23 +243,31 @@ def generate_configs(total_reps: int = None, domain_name: str = cfg.DEFAULT_DOMA
                         attack_type=attack_type,
                         m=m_label,
                         d=detectors,
-                        domain=domain_name,
+                        domain=selected_domain,
                         condition_name=condition_name,
                     )
                 )
     return configs
 
 
-def generate_smoke_configs(domain_name: str = cfg.DEFAULT_DOMAIN) -> List[ExperimentConfig]:
+def generate_smoke_configs(domain_name: str | None = None) -> List[ExperimentConfig]:
+    selected_domain = domain_name or _default_domain_name()
     # Minimal manual validation: clean baseline, all-malicious sanity for each
     # attack, and one collusive detector condition to exercise interrogation.
     configs = [
-        ExperimentConfig(1, AttackType.SUBOPTIMAL_FIXATION, "0", 0, domain_name, condition_name="clean_baseline"),
+        ExperimentConfig(1, AttackType.SUBOPTIMAL_FIXATION, "0", 0, selected_domain, condition_name="clean_baseline"),
     ]
     for attack_type in ATTACK_TYPES:
-        configs.append(ExperimentConfig(1, attack_type, "all", 0, domain_name, condition_name="all_malicious_sanity"))
+        configs.append(ExperimentConfig(1, attack_type, "all", 0, selected_domain, condition_name="all_malicious_sanity"))
     configs.append(
-        ExperimentConfig(1, AttackType.FAKE_INJECTION, "2", 1, domain_name, condition_name="collusive_attack_one_detector")
+        ExperimentConfig(
+            1,
+            AttackType.FAKE_INJECTION,
+            "2",
+            1,
+            selected_domain,
+            condition_name="collusive_attack_one_detector",
+        )
     )
     return configs
 
@@ -704,7 +717,7 @@ def _resolve_domain_name(args: argparse.Namespace) -> str:
     selected = (args.domain or "").strip()
     if selected:
         return selected
-    return get_domain_registry().default_domain_name()
+    return _default_domain_name()
 
 
 def _resolve_domain(args: argparse.Namespace):

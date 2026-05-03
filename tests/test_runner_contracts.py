@@ -76,6 +76,18 @@ def test_generate_configs_writes_selected_domain() -> None:
     assert {config.domain for config in configs} == {"knowledge_qa"}
 
 
+def test_generate_configs_defaults_to_registry_default_domain(monkeypatch) -> None:
+    monkeypatch.setattr(runner.cfg, "DEFAULT_DOMAIN", "code_synthesis")
+    monkeypatch.setattr(runner, "_default_domain_name", lambda: "knowledge_qa")
+
+    configs = runner.generate_configs(total_reps=1)
+    smoke_configs = runner.generate_smoke_configs()
+
+    assert configs
+    assert {config.domain for config in configs} == {"knowledge_qa"}
+    assert {config.domain for config in smoke_configs} == {"knowledge_qa"}
+
+
 def test_build_task_pools_uses_selected_domain_task_builder(monkeypatch) -> None:
     monkeypatch.setattr(runner.cfg, "HOTPOT_QA_TASKS", 7)
     calls: dict[str, object] = {}
