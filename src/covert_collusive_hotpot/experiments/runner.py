@@ -30,6 +30,7 @@ from covert_collusive_hotpot.agents.detector import DetectorAgent
 from covert_collusive_hotpot.agents.worker import WorkerAgent
 from covert_collusive_hotpot.core import config as cfg
 from covert_collusive_hotpot.core.models import AttackType, KnowledgeLevel, Role
+from covert_collusive_hotpot.domains.registry import get_domain_registry
 from covert_collusive_hotpot.experiments.evaluation import Evaluator
 from covert_collusive_hotpot.experiments.hotpot_loader import load_hotpotqa_tasks
 from covert_collusive_hotpot.experiments.prompt_injection import inject_hidden_prompts
@@ -66,7 +67,6 @@ def _slugify(value: str) -> str:
     return cleaned or "run"
 
 
-DOMAIN = "knowledge_qa"
 ATTACK_TYPES = [
     AttackType.SUBOPTIMAL_FIXATION,
     AttackType.REFRAMING_MISALIGNMENT,
@@ -149,7 +149,7 @@ class ExperimentConfig:
     attack_type: AttackType
     m: str
     d: int
-    domain: str = DOMAIN
+    domain: str
     knowledge_level: Optional[KnowledgeLevel] = None
     condition_name: str = ""
 
@@ -228,7 +228,7 @@ def _task_key(exp_config: ExperimentConfig, task: Dict[str, Any]) -> str:
     return f"{_config_key(exp_config)}::{task['task_id']}"
 
 
-def generate_configs(total_reps: int = None) -> List[ExperimentConfig]:
+def generate_configs(total_reps: int = None, domain_name: str = cfg.DEFAULT_DOMAIN) -> List[ExperimentConfig]:
     reps = total_reps or TOTAL_REPS
     configs: List[ExperimentConfig] = []
     for attack_type in ATTACK_TYPES:
@@ -240,22 +240,23 @@ def generate_configs(total_reps: int = None) -> List[ExperimentConfig]:
                         attack_type=attack_type,
                         m=m_label,
                         d=detectors,
+                        domain=domain_name,
                         condition_name=condition_name,
                     )
                 )
     return configs
 
 
-def generate_smoke_configs() -> List[ExperimentConfig]:
+def generate_smoke_configs(domain_name: str = cfg.DEFAULT_DOMAIN) -> List[ExperimentConfig]:
     # Minimal manual validation: clean baseline, all-malicious sanity for each
     # attack, and one collusive detector condition to exercise interrogation.
     configs = [
-        ExperimentConfig(1, AttackType.SUBOPTIMAL_FIXATION, "0", 0, condition_name="clean_baseline"),
+        ExperimentConfig(1, AttackType.SUBOPTIMAL_FIXATION, "0", 0, domain_name, condition_name="clean_baseline"),
     ]
     for attack_type in ATTACK_TYPES:
-        configs.append(ExperimentConfig(1, attack_type, "all", 0, condition_name="all_malicious_sanity"))
+        configs.append(ExperimentConfig(1, attack_type, "all", 0, domain_name, condition_name="all_malicious_sanity"))
     configs.append(
-        ExperimentConfig(1, AttackType.FAKE_INJECTION, "2", 1, condition_name="collusive_attack_one_detector")
+        ExperimentConfig(1, AttackType.FAKE_INJECTION, "2", 1, domain_name, condition_name="collusive_attack_one_detector")
     )
     return configs
 
@@ -311,8 +312,8 @@ async def _append_task_progress(jsonl_path: str, lock: asyncio.Lock, task_key: s
             f.flush()
 
 
-def _build_task_pools(seed: Optional[int] = None) -> Dict[str, List[Dict[str, Any]]]:
-    return {DOMAIN: load_hotpotqa_tasks(cfg.HOTPOT_QA_TASKS, seed=seed)}
+def _build_task_pools(domain_name: str, seed: Optional[int] = None) -> Dict[str, List[Dict[str, Any]]]:
+    return {domain_name: load_hotpotqa_tasks(cfg.HOTPOT_QA_TASKS, seed=seed)}
 
 
 def _collect_numeric(results: List[Dict[str, Any]], key: str) -> List[float]:
@@ -582,7 +583,8 @@ async def run_all_experiments(configs: List[ExperimentConfig], max_concurrent: i
 
     completed_configs = _load_completed_configs(OUTPUT_CSV)
     task_progress = _load_task_progress(TASK_PROGRESS_JSONL)
-    task_pools = _build_task_pools(seed=cfg.GLOBAL_SEED)
+    domain_name = configs[0].domain if configs else cfg.DEFAULT_DOMAIN
+    task_pools = _build_task_pools(domain_name=domain_name, seed=cfg.GLOBAL_SEED)
 
     pending_configs = [config_item for config_item in configs if _config_key(config_item) not in completed_configs]
     pending_task_count = sum(
@@ -644,19 +646,32 @@ async def run_all_experiments(configs: List[ExperimentConfig], max_concurrent: i
     await asyncio.gather(*(run_with_semaphore(config_item) for config_item in pending_configs))
 
 
-def parse_args() -> argparse.Namespace:
+def build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Run collusive covert HotpotQA experiments")
     parser.add_argument("--smoke", action="store_true", help="Run a tiny validation matrix instead of the full experiment")
     parser.add_argument("--smoke-tasks", type=int, default=2, help="Task count used with --smoke")
     parser.add_argument("--tasks", type=int, default=None, help="Override HotpotQA tasks per condition")
     parser.add_argument("--reps", type=int, default=None, help="Override repetitions")
     parser.add_argument("--max-concurrent", type=int, default=MAX_CONCURRENT, help="Concurrent condition runners")
+    parser.add_argument("--domain", type=str, default=None, help="Override experiment domain")
     parser.add_argument("--run-label", type=str, default=None, help="Override RUN_LABEL for outputs")
     parser.add_argument("--output-csv", type=str, default=None, help="Aggregate output CSV path")
     parser.add_argument("--task-progress-jsonl", type=str, default=None, help="Task checkpoint JSONL path")
     parser.add_argument("--dry-run", action="store_true", help="Print planned configs and ETA without API calls")
     parser.add_argument("--no-shuffle", action="store_true", help="Do not shuffle condition order")
-    return parser.parse_args()
+    return parser
+
+
+def parse_args() -> argparse.Namespace:
+    return build_arg_parser().parse_args()
+
+
+def _resolve_domain_name(args: argparse.Namespace) -> str:
+    return (args.domain or cfg.DEFAULT_DOMAIN).strip()
+
+
+def _resolve_domain(args: argparse.Namespace):
+    return get_domain_registry().get(_resolve_domain_name(args))
 
 
 def _apply_cli_overrides(args: argparse.Namespace) -> None:
@@ -705,19 +720,21 @@ def main() -> None:
     logging.getLogger("httpx").setLevel(logging.WARNING)
     logging.getLogger("huggingface_hub").setLevel(logging.WARNING)
     args = parse_args()
+    domain = _resolve_domain(args)
+    domain_name = domain.name
     _apply_cli_overrides(args)
 
     if cfg.GLOBAL_SEED is not None:
         random.seed(cfg.GLOBAL_SEED)
 
-    configs = generate_smoke_configs() if args.smoke else generate_configs(TOTAL_REPS)
+    configs = generate_smoke_configs(domain_name=domain_name) if args.smoke else generate_configs(TOTAL_REPS, domain_name=domain_name)
     if not args.no_shuffle:
         random.shuffle(configs)
 
     total_task_runs = len(configs) * cfg.HOTPOT_QA_TASKS
     print("=== Collusive Covert HotpotQA Experiment ===")
     print(f"configs={len(configs)} tasks_per_config={cfg.HOTPOT_QA_TASKS} total_task_runs={total_task_runs}")
-    print(f"turns={cfg.TOTAL_TURNS} max_tokens={cfg.MAX_TOKENS} model={cfg.MODEL_NAME} output={OUTPUT_CSV}")
+    print(f"domain={domain_name} turns={cfg.TOTAL_TURNS} max_tokens={cfg.MAX_TOKENS} model={cfg.MODEL_NAME} output={OUTPUT_CSV}")
     print(f"attack_types={[attack.value for attack in ATTACK_TYPES]}")
     print(f"conditions={[name for name, _m, _d in CONDITION_SPECS]}")
 

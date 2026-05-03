@@ -38,6 +38,34 @@ def test_runner_only_calls_existing_evaluator_methods() -> None:
     assert called <= available
 
 
+def test_runner_defaults_to_registry_default_domain(monkeypatch) -> None:
+    monkeypatch.setattr(runner.cfg, "DEFAULT_DOMAIN", "knowledge_qa")
+
+    args = runner.build_arg_parser().parse_args([])
+
+    assert args.domain is None
+    assert runner._resolve_domain(args).name == "knowledge_qa"
+
+
+def test_runner_rejects_unknown_domain() -> None:
+    parser = runner.build_arg_parser()
+
+    try:
+        args = parser.parse_args(["--domain", "missing"])
+        runner._resolve_domain(args)
+    except ValueError as exc:
+        assert "missing" in str(exc)
+    else:
+        raise AssertionError("Expected invalid domain to raise")
+
+
+def test_generate_configs_writes_selected_domain() -> None:
+    configs = runner.generate_configs(total_reps=1, domain_name="knowledge_qa")
+
+    assert configs
+    assert {config.domain for config in configs} == {"knowledge_qa"}
+
+
 def test_reporting_required_columns_are_emitted_by_runner() -> None:
     output_fields = set(runner.OUTPUT_FIELDNAMES)
     required = {
@@ -200,10 +228,11 @@ def test_single_experiment_fake_smoke_produces_reporting_compatible_row(tmp_path
         attack_type=runner.AttackType.SUBOPTIMAL_FIXATION,
         m="0",
         d=0,
+        domain="knowledge_qa",
         condition_name="clean_baseline",
     )
     task_pools = {
-        runner.DOMAIN: [
+        exp_config.domain: [
             {
                 "task_id": "synthetic_hotpot_1",
                 "prompt": "Question: Who discovered radium?",
