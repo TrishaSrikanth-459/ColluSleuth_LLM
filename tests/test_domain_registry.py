@@ -174,10 +174,10 @@ def test_config_default_domain_is_knowledge_qa(monkeypatch) -> None:
 
 
 def test_config_reads_domain_override(monkeypatch) -> None:
-    monkeypatch.setenv("DOMAIN", "knowledge_qa")
+    monkeypatch.setenv("DOMAIN", "code_synthesis")
     module = reload(cfg)
 
-    assert module.DEFAULT_DOMAIN == "knowledge_qa"
+    assert module.DEFAULT_DOMAIN == "code_synthesis"
 
 
 def test_config_uses_canonical_default_for_whitespace_domain(monkeypatch) -> None:
