@@ -12,6 +12,15 @@ the public command/package surface plus a small set of stable local logic.
 - checks the README still advertises the primary `python -m ...` commands
 - verifies the root compatibility wrappers bootstrap `src/` correctly from a checkout
 - executes the packaged reporting entry point on a minimal synthetic CSV fixture
+- checks that public help surfaces expose the optional `--domain` flag
+
+`test_domain_registry.py`
+- pure local unit tests for the domain abstraction and registry
+- checks default-domain behavior and the registered `knowledge_qa` domain implementation
+
+`test_domain_reporting.py`
+- pure local tests for the domain-aware reporting entry point
+- checks `REPORT_DOMAIN`/CLI precedence, registry-backed adapter resolution, and reporting loader compatibility
 
 `test_role_assignment.py`
 - pure local unit tests for `covert_collusive_hotpot.experiments.role_assignment`
@@ -53,6 +62,8 @@ PYTHONPATH=src pytest tests/test_package_entrypoints.py -q
 Run the pure local unit tests:
 
 ```bash
+PYTHONPATH=src pytest tests/test_domain_registry.py -q
+PYTHONPATH=src pytest tests/test_domain_reporting.py -q
 PYTHONPATH=src pytest tests/test_role_assignment.py -q
 PYTHONPATH=src pytest tests/test_permission_manager.py -q
 PYTHONPATH=src pytest tests/test_evaluation.py -q
@@ -67,7 +78,7 @@ Default CI:
 - runs on `push` to `main` and `pull_request` into `main`
 - installs the package editable
 - runs `pytest tests -q`
-- checks both experiment CLI help surfaces
+- checks experiment CLI help surfaces
 
 Manual Azure smoke:
 - file: `.github/workflows/azure-manual-smoke.yml`
@@ -81,8 +92,11 @@ Manual Azure smoke:
 The local experiment smoke command:
 
 ```bash
-PYTHONPATH=src python -m covert_collusive_hotpot.run_experiments --smoke --smoke-tasks 1 --max-concurrent 1 --run-label local_smoke
+PYTHONPATH=src python -m covert_collusive_hotpot.run_experiments --domain knowledge_qa --smoke --smoke-tasks 1 --max-concurrent 1 --run-label local_smoke
 ```
 
 does more than import the package. It also loads the HotpotQA distractor split
 through the `datasets` library.
+
+`knowledge_qa` is the implicit default domain, so the explicit `--domain`
+argument above is documentation rather than a compatibility requirement.

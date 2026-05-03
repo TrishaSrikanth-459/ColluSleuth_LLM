@@ -57,6 +57,25 @@ def test_packaged_experiment_entry_module_import() -> None:
     assert callable(run_module.main)
 
 
+def test_runner_import_does_not_load_ag2_or_matplotlib() -> None:
+    check_code = """
+import sys
+from covert_collusive_hotpot.experiments import runner
+print('autogen' in sys.modules)
+print('matplotlib' in sys.modules)
+"""
+    result = subprocess.run(
+        [sys.executable, "-c", check_code],
+        cwd=Path(__file__).resolve().parents[1],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0
+    assert result.stdout.splitlines() == ["False", "False"]
+
+
 def test_readme_mentions_new_entry_points() -> None:
     readme_text = Path(__file__).resolve().parents[1].joinpath("README.md").read_text()
     assert "python -m covert_collusive_hotpot.run_experiments" in readme_text
@@ -157,3 +176,42 @@ def test_packaged_reporting_entry_point_executes_with_minimal_csv(tmp_path) -> N
     )
     assert result.returncode == 0
     assert (tmp_path / "tables" / "summary.csv").exists()
+
+
+def test_packaged_experiment_help_mentions_domain_flag() -> None:
+    result = subprocess.run(
+        [sys.executable, "-m", "covert_collusive_hotpot.run_experiments", "--help"],
+        cwd=Path(__file__).resolve().parents[1],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0
+    assert "--domain" in result.stdout
+
+
+def test_packaged_reporting_help_mentions_domain_flag() -> None:
+    result = subprocess.run(
+        [sys.executable, "-m", "covert_collusive_hotpot.generate_paper_assets", "--help"],
+        cwd=Path(__file__).resolve().parents[1],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0
+    assert "--domain" in result.stdout
+
+
+def test_legacy_experiment_wrapper_help_mentions_domain_flag() -> None:
+    result = subprocess.run(
+        [sys.executable, "parallel_experiment_runner.py", "--help"],
+        cwd=Path(__file__).resolve().parents[1],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0
+    assert "--domain" in result.stdout

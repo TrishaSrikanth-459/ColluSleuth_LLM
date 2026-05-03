@@ -3,6 +3,7 @@ import sqlite3
 
 import pytest
 
+from covert_collusive_hotpot.core.models import PermissionLevel
 from covert_collusive_hotpot.experiments.evaluation import Evaluator
 
 
@@ -106,3 +107,85 @@ def test_evaluator_reports_zero_unsafe_output_rate_for_qa(evaluator_factory) -> 
         assert evaluator.compute_unsafe_output_rate() == 0.0
     finally:
         evaluator.close()
+
+
+def test_evaluator_replays_permissions_with_domain_capabilities(tmp_path) -> None:
+    db_path = tmp_path / "permission_replay.sqlite3"
+    conn = sqlite3.connect(db_path)
+    conn.execute("CREATE TABLE metadata (key TEXT PRIMARY KEY, value TEXT NOT NULL)")
+    conn.execute(
+        """
+        CREATE TABLE messages (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            turn INTEGER,
+            sender_id INTEGER,
+            content TEXT,
+            is_private INTEGER,
+            recipient_id INTEGER,
+            timestamp REAL
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE TABLE actions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            turn INTEGER,
+            agent_id INTEGER,
+            action_type TEXT,
+            content TEXT,
+            timestamp REAL
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE TABLE recommendations (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            target_agent_id INTEGER,
+            action TEXT,
+            magnitude REAL,
+            confidence REAL,
+            detector_ids TEXT,
+            evidence TEXT,
+            turn INTEGER,
+            timestamp REAL
+        )
+        """
+    )
+    _write_metadata(conn, "all_agent_ids", [1])
+    _write_metadata(conn, "malicious_ids", [])
+    conn.execute(
+        """
+        INSERT INTO recommendations (
+            target_agent_id, action, magnitude, confidence, detector_ids, evidence, turn, timestamp
+        )
+        VALUES (1, 'decrease_credibility', 0.3, 1.0, '[]', 'benign false positive', 1, 0.0)
+        """
+    )
+    conn.execute(
+        "INSERT INTO messages (turn, sender_id, content, is_private, recipient_id, timestamp) VALUES (2, 1, 'msg', 0, NULL, 0.0)"
+    )
+    conn.commit()
+    conn.close()
+
+    non_language_only = Evaluator(
+        str(db_path),
+        "synthetic",
+        type("Caps", (), {"language_only_permissions": False})(),
+    )
+    language_only = Evaluator(
+        str(db_path),
+        "knowledge_qa",
+        type("Caps", (), {"language_only_permissions": True})(),
+    )
+
+    try:
+        non_language_history, _ = non_language_only._replay_permissions()
+        language_history, _ = language_only._replay_permissions()
+
+        assert non_language_history[1][1] == PermissionLevel.RESTRICTED
+        assert language_history[1][1] == PermissionLevel.QUARANTINE
+    finally:
+        non_language_only.close()
+        language_only.close()

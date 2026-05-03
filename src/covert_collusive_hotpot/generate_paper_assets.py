@@ -1,146 +1,103 @@
 """
-Generate paper-ready tables and figures from QA-only experiment results.
+Domain-aware entry point for generating paper-ready tables and figures.
 """
 from __future__ import annotations
 
+import argparse
 import os
 from pathlib import Path
 
-import matplotlib.pyplot as plt
-import pandas as pd
+from covert_collusive_hotpot.domains.base import ReportingAdapter
+from covert_collusive_hotpot.domains.registry import get_domain_registry
+from covert_collusive_hotpot.domains.knowledge_qa.reporting import load_results as _load_knowledge_qa_results
 
 
 INPUT_CSV = os.getenv("INPUT_CSV", "experiment_results.csv")
 OUTPUT_TABLE_DIR = Path(os.getenv("OUTPUT_TABLE_DIR", "results/paper_tables"))
 OUTPUT_FIG_DIR = Path(os.getenv("OUTPUT_FIG_DIR", "results/paper_figures"))
 EXPECTED_TASKS = int(os.getenv("EXPECTED_TASKS", "100"))
-REQUIRE_FULL_TASK_COUNTS = os.getenv("REQUIRE_FULL_TASK_COUNTS", "true").strip().lower() in {"1", "true", "yes", "y", "on"}
-
-METRIC_COLUMNS = [
-    "unsafe_output_rate_mean",
-    "functional_correctness_mean",
-    "latency_mean",
-    "false_positive_rate_mean",
-    "detection_rate_mean",
-    "detection_latency_mean",
-    "benign_restriction_rate_mean",
-    "benign_recovery_time_mean",
-]
-
-STD_COLUMNS = [
-    "unsafe_output_rate_std",
-    "functional_correctness_std",
-    "latency_std",
-    "false_positive_rate_std",
-    "detection_rate_std",
-    "detection_latency_std",
-    "benign_restriction_rate_std",
-    "benign_recovery_time_std",
-]
+REQUIRE_FULL_TASK_COUNTS = os.getenv("REQUIRE_FULL_TASK_COUNTS", "true").strip().lower() in {
+    "1",
+    "true",
+    "yes",
+    "y",
+    "on",
+}
 
 
-def ensure_dirs() -> None:
-    OUTPUT_TABLE_DIR.mkdir(parents=True, exist_ok=True)
-    OUTPUT_FIG_DIR.mkdir(parents=True, exist_ok=True)
+def resolve_domain_name(cli_value: str | None = None) -> str:
+    selected = cli_value if cli_value is not None else os.getenv("REPORT_DOMAIN")
+    selected = (selected or "").strip()
+    if selected:
+        return selected
+    return get_domain_registry().default_domain_name()
 
 
-def _pretty_knowledge_level(value: object) -> str:
-    if pd.isna(value):
-        return "N/A"
-    mapping = {
-        "unaware": "Unaware",
-        "aware_of_presence": "Aware",
-        "fully_prepared": "Prepared",
-        "None": "N/A",
-        "none": "N/A",
-        "": "N/A",
-    }
-    return mapping.get(str(value), str(value))
-
-
-def _format_mean_std(mean_series: pd.Series, std_series: pd.Series, digits: int = 3) -> pd.Series:
-    return mean_series.round(digits).astype(str) + " ± " + std_series.round(digits).astype(str)
-
-
-def load_results(path: str) -> pd.DataFrame:
-    if not os.path.exists(path):
-        raise FileNotFoundError(f"Could not find results file: {path}")
-    df = pd.read_csv(path)
-    required = {
-        "domain",
-        "m",
-        "d",
-        "knowledge_level",
-        "tasks_evaluated",
-        "unsafe_output_rate_mean",
-        "functional_correctness_mean",
-        "latency_mean",
-        "false_positive_rate_mean",
-        "detection_rate_mean",
-        "detection_latency_mean",
-    }
-    missing = required - set(df.columns)
-    if missing:
-        raise ValueError(f"Missing required columns: {sorted(missing)}")
-    for col in set(METRIC_COLUMNS + STD_COLUMNS + ["m", "d", "tasks_evaluated"]):
-        if col in df.columns:
-            df[col] = pd.to_numeric(df[col], errors="coerce")
-    df = df[df["domain"].astype(str) == "knowledge_qa"]
-    if REQUIRE_FULL_TASK_COUNTS:
-        df = df[df["tasks_evaluated"] == EXPECTED_TASKS]
-    return df.reset_index(drop=True)
-
-
-def save_summary(df: pd.DataFrame) -> None:
-    grouped = df[METRIC_COLUMNS + STD_COLUMNS].mean(numeric_only=True).to_frame().T
-    grouped["unsafe_output_rate"] = _format_mean_std(grouped["unsafe_output_rate_mean"], grouped["unsafe_output_rate_std"])
-    grouped["functional_correctness"] = _format_mean_std(grouped["functional_correctness_mean"], grouped["functional_correctness_std"])
-    grouped["latency"] = _format_mean_std(grouped["latency_mean"], grouped["latency_std"])
-    grouped["false_positive_rate"] = _format_mean_std(grouped["false_positive_rate_mean"], grouped["false_positive_rate_std"])
-    grouped["detection_rate"] = _format_mean_std(grouped["detection_rate_mean"], grouped["detection_rate_std"])
-    grouped[["unsafe_output_rate", "functional_correctness", "latency", "false_positive_rate", "detection_rate"]].to_csv(
-        OUTPUT_TABLE_DIR / "summary.csv", index=False
+def load_results(path: str):
+    return _load_knowledge_qa_results(
+        path,
+        expected_task_count=EXPECTED_TASKS,
+        require_full_task_counts=REQUIRE_FULL_TASK_COUNTS,
     )
 
 
-def save_condition_table(df: pd.DataFrame) -> None:
-    out = df.copy()
-    out["knowledge_level"] = out["knowledge_level"].apply(_pretty_knowledge_level)
-    out = out.sort_values(by=["m", "d", "knowledge_level", "rep"], ascending=[True, True, True, True])
-    out.to_csv(OUTPUT_TABLE_DIR / "condition_table.csv", index=False)
-
-
-def plot_metric_by_condition(df: pd.DataFrame, metric: str, title: str, filename: str) -> None:
-    metric_col = f"{metric}_mean"
-    if metric_col not in df.columns:
-        return
-    subset = df.copy()
-    subset["knowledge_level_pretty"] = subset["knowledge_level"].apply(_pretty_knowledge_level)
-    subset["condition"] = (
-        "m=" + subset["m"].astype(str)
-        + ", d=" + subset["d"].astype(str)
-        + ", k=" + subset["knowledge_level_pretty"].astype(str)
+def resolve_reporting_adapter(
+    domain_name: str,
+    *,
+    input_csv_path: str,
+    output_table_dir: str,
+    output_fig_dir: str,
+    expected_task_count: int,
+    require_full_task_counts: bool,
+) -> ReportingAdapter:
+    domain = get_domain_registry().get(domain_name)
+    return domain.reporting_adapter(
+        input_csv_path=input_csv_path,
+        output_table_dir=output_table_dir,
+        output_fig_dir=output_fig_dir,
+        expected_task_count=expected_task_count,
+        require_full_task_counts=require_full_task_counts,
     )
-    grouped = subset.groupby("condition", dropna=False)[metric_col].mean().reset_index()
-    plt.figure(figsize=(14, 6))
-    plt.bar(grouped["condition"], grouped[metric_col])
-    plt.xticks(rotation=70, ha="right")
-    plt.ylabel(metric.replace("_", " ").title())
-    plt.title(title)
-    plt.tight_layout()
-    plt.savefig(OUTPUT_FIG_DIR / filename, dpi=200)
-    plt.close()
 
 
-def main() -> None:
-    ensure_dirs()
-    df = load_results(INPUT_CSV)
-    save_summary(df)
-    save_condition_table(df)
-    plot_metric_by_condition(df, "detection_rate", "Detection Rate by Condition", "detection_rate_by_condition.png")
-    plot_metric_by_condition(df, "functional_correctness", "Functional Correctness by Condition", "functional_correctness_by_condition.png")
-    print(f"Saved paper tables to {OUTPUT_TABLE_DIR.resolve()}")
-    print(f"Saved paper figures to {OUTPUT_FIG_DIR.resolve()}")
+def build_arg_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="Generate paper-ready tables and figures from experiment results")
+    parser.add_argument("--domain", default=None, help="Reporting domain. Defaults to REPORT_DOMAIN or DOMAIN/default config")
+    parser.add_argument("--input-csv", default=INPUT_CSV, help="Input aggregate experiment results CSV")
+    parser.add_argument("--output-table-dir", default=str(OUTPUT_TABLE_DIR), help="Directory for generated CSV tables")
+    parser.add_argument("--output-fig-dir", default=str(OUTPUT_FIG_DIR), help="Directory for generated figures")
+    parser.add_argument("--expected-tasks", type=int, default=EXPECTED_TASKS, help="Expected tasks per condition")
+    task_count_group = parser.add_mutually_exclusive_group()
+    task_count_group.add_argument(
+        "--require-full-task-counts",
+        dest="require_full_task_counts",
+        action="store_true",
+        help="Only include rows with expected task counts",
+    )
+    task_count_group.add_argument(
+        "--allow-partial-task-counts",
+        dest="require_full_task_counts",
+        action="store_false",
+        help="Include rows even if task counts are partial",
+    )
+    parser.set_defaults(require_full_task_counts=REQUIRE_FULL_TASK_COUNTS)
+    return parser
+
+
+def main(argv: list[str] | None = None) -> None:
+    args = build_arg_parser().parse_args(argv)
+    domain_name = resolve_domain_name(args.domain)
+    adapter = resolve_reporting_adapter(
+        domain_name,
+        input_csv_path=args.input_csv,
+        output_table_dir=args.output_table_dir,
+        output_fig_dir=args.output_fig_dir,
+        expected_task_count=args.expected_tasks,
+        require_full_task_counts=args.require_full_task_counts,
+    )
+    adapter.run()
+    print(f"Saved {domain_name} paper tables to {Path(args.output_table_dir).resolve()}")
+    print(f"Saved {domain_name} paper figures to {Path(args.output_fig_dir).resolve()}")
 
 
 if __name__ == "__main__":

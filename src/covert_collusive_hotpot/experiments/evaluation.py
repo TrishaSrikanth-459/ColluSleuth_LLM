@@ -14,10 +14,17 @@ from covert_collusive_hotpot.core.permission_manager import PermissionManager
 
 
 class Evaluator:
-    def __init__(self, db_path: str, domain: str):
+    def __init__(self, db_path: str, domain: str, domain_capabilities: Any = None):
         self.conn = sqlite3.connect(db_path)
         self.conn.row_factory = sqlite3.Row
         self.domain = domain
+        self.domain_capabilities = domain_capabilities
+
+    def _is_language_only_permissions(self) -> bool:
+        capabilities = getattr(self, "domain_capabilities", None)
+        if capabilities is None:
+            return False
+        return bool(getattr(capabilities, "language_only_permissions", False))
 
     def _get_metadata(self, key: str, default=None):
         cursor = self.conn.cursor()
@@ -117,7 +124,10 @@ class Evaluator:
         for turn in range(1, max_turn + 1):
             turn_perm: Dict[int, PermissionLevel] = {}
             for aid in benign_ids:
-                turn_perm[aid] = pm.get_permission_level(aid, is_language_only=True)
+                turn_perm[aid] = pm.get_permission_level(
+                    aid,
+                    is_language_only=self._is_language_only_permissions(),
+                )
             history.append(turn_perm)
 
             for rec in recs_by_turn.get(turn, []):

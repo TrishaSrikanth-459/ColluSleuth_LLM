@@ -39,6 +39,8 @@ def _get_env_list(key: str) -> list[str]:
 TEMPERATURE = _get_env_float("TEMPERATURE", "0.4")
 MAX_TOKENS = _get_env_int("MAX_TOKENS", "1000")
 MODEL_NAME = os.getenv("MODEL_NAME", os.getenv("AZURE_OPENAI_DEPLOYMENT", "gpt-4o"))
+CANONICAL_DEFAULT_DOMAIN = "knowledge_qa"
+DEFAULT_DOMAIN = os.getenv("DOMAIN", CANONICAL_DEFAULT_DOMAIN).strip() or CANONICAL_DEFAULT_DOMAIN
 
 # Experiment design defaults from the collusive covert-attack protocol.
 TOTAL_TURNS = _get_env_int("TOTAL_TURNS", "4")

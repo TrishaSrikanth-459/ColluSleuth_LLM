@@ -29,6 +29,7 @@ class Simulation:
         experiment_id: str = "exp",
         metadata: Dict[str, Any] = None,
         domain: str = None,
+        domain_capabilities: Any = None,
     ):
         self.workers = {a.id: a for a in workers}
         self.detectors = {d.id: d for d in detectors}
@@ -41,6 +42,7 @@ class Simulation:
         self.metadata = metadata or {}
         self.experiment_id = experiment_id
         self.domain = domain
+        self.domain_capabilities = domain_capabilities
         self.logger = Logger(experiment_id, metadata, log_dir=config.LOG_DIR)
         self.permission_manager = PermissionManager()
         self.permission_manager.initialize_agents(list(self.workers.keys()))
@@ -96,12 +98,21 @@ class Simulation:
             return agent.id == int(self.primary_output_agent_id) and agent.agent_data.role == Role.REPORTER
         return True
 
+    def _is_language_only_permissions(self) -> bool:
+        capabilities = getattr(self, "domain_capabilities", None)
+        if capabilities is None:
+            return False
+        return bool(getattr(capabilities, "language_only_permissions", False))
+
     async def run_turn(self):
         self.turn += 1
 
         for agent_id in sorted(self.workers.keys()):
             agent = self.workers[agent_id]
-            level = self.permission_manager.get_permission_level(agent_id, is_language_only=(self.domain == "knowledge_qa"))
+            level = self.permission_manager.get_permission_level(
+                agent_id,
+                is_language_only=self._is_language_only_permissions(),
+            )
             if level in [PermissionLevel.REMOVED, PermissionLevel.QUARANTINE]:
                 continue
 
@@ -172,7 +183,7 @@ class Simulation:
             return
         primary_level = self.permission_manager.get_permission_level(
             int(self.primary_output_agent_id),
-            is_language_only=(self.domain == "knowledge_qa"),
+            is_language_only=self._is_language_only_permissions(),
         )
         if primary_level == PermissionLevel.FULL_ACCESS:
             return  # Reporter was never restricted; no fallback needed
@@ -184,7 +195,8 @@ class Simulation:
                 continue
 
             level = self.permission_manager.get_permission_level(
-                agent_id, is_language_only=(self.domain == "knowledge_qa")
+                agent_id,
+                is_language_only=self._is_language_only_permissions(),
             )
             if level != PermissionLevel.FULL_ACCESS:
                 continue

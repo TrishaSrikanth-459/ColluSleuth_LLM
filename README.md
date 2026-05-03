@@ -70,8 +70,12 @@ Packaged entry points:
 
 ```bash
 python -m covert_collusive_hotpot.run_experiments --help
-python -m covert_collusive_hotpot.generate_paper_assets
+python -m covert_collusive_hotpot.generate_paper_assets --help
 ```
+
+Both entry points accept an optional `--domain` argument. `knowledge_qa` remains
+the implicit default for backward compatibility, so omitting `--domain` is
+equivalent to passing `--domain knowledge_qa`.
 
 The legacy root wrappers remain temporarily available for compatibility:
 
@@ -100,6 +104,7 @@ Check the two primary experiment entry surfaces:
 
 ```bash
 PYTHONPATH=src python -m covert_collusive_hotpot.run_experiments --help
+PYTHONPATH=src python -m covert_collusive_hotpot.generate_paper_assets --help
 python parallel_experiment_runner.py --help
 ```
 
@@ -117,7 +122,7 @@ See [tests/README.md](tests/README.md) for a more detailed breakdown of the test
 Run a small validation matrix before the full experiment:
 
 ```bash
-python -m covert_collusive_hotpot.run_experiments --smoke --smoke-tasks 2 --max-concurrent 1 --run-label smoke
+python -m covert_collusive_hotpot.run_experiments --domain knowledge_qa --smoke --smoke-tasks 2 --max-concurrent 1 --run-label smoke
 ```
 
 The smoke and full experiment commands require the HotpotQA dataset. On the first run, `datasets` will download the `hotpot_qa` distractor split from Hugging Face and cache it locally. That means the first run requires internet access unless you already have the dataset cached.
@@ -136,7 +141,7 @@ Use `tmux` so the experiment survives SSH disconnects:
 
 ```bash
 tmux new -s collusive_hotpot
-python -m covert_collusive_hotpot.run_experiments --max-concurrent 4 --run-label full_collusive_hotpot
+python -m covert_collusive_hotpot.run_experiments --domain knowledge_qa --max-concurrent 4 --run-label full_collusive_hotpot
 ```
 
 Detach with:
