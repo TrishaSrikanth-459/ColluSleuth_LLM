@@ -1,3 +1,5 @@
+from typing import get_type_hints
+
 from covert_collusive_hotpot.domains.base import (
     DomainCapabilities,
     DomainSpec,
@@ -30,7 +32,7 @@ class DummyDomain(DomainSpec):
         return agents
 
     def reporting_adapter(self):
-        return DummyReportingAdapter()
+        return DummyReportingAdapter
 
 
 def test_domain_spec_is_abstract() -> None:
@@ -45,10 +47,19 @@ def test_domain_spec_is_abstract() -> None:
         raise AssertionError("Expected DomainSpec instantiation to fail")
 
 
-def test_dummy_domain_reporting_adapter_satisfies_protocol() -> None:
-    domain = DummyDomain("knowledge_qa")
+def test_domain_spec_reporting_adapter_contract_is_factory_typed() -> None:
+    hints = get_type_hints(DomainSpec.reporting_adapter)
 
-    assert isinstance(domain.reporting_adapter(), ReportingAdapter)
+    assert hints["return"] == type[ReportingAdapter]
+
+
+def test_dummy_domain_reporting_adapter_returns_factory() -> None:
+    domain = DummyDomain("knowledge_qa")
+    adapter_type = domain.reporting_adapter()
+    adapter = adapter_type()
+
+    assert adapter_type is DummyReportingAdapter
+    assert isinstance(adapter, ReportingAdapter)
 
 
 def test_registry_exposes_registered_domain_names() -> None:

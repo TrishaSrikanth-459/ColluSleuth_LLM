@@ -49,5 +49,5 @@ class DomainSpec(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def reporting_adapter(self) -> ReportingAdapter:
+    def reporting_adapter(self) -> type[ReportingAdapter]:
         raise NotImplementedError
