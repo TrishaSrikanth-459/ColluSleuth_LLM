@@ -30,11 +30,10 @@ from covert_collusive_hotpot.agents.detector import DetectorAgent
 from covert_collusive_hotpot.agents.worker import WorkerAgent
 from covert_collusive_hotpot.core import config as cfg
 from covert_collusive_hotpot.core.models import AttackType, KnowledgeLevel, Role
+from covert_collusive_hotpot.domains.base import PromptInjectionContext
 from covert_collusive_hotpot.domains.registry import get_domain_registry
 from covert_collusive_hotpot.experiments.evaluation import Evaluator
-from covert_collusive_hotpot.experiments.prompt_injection import inject_hidden_prompts
 from covert_collusive_hotpot.experiments.role_assignment import (
-    assign_roles,
     malicious_count_from_label,
     mark_malicious,
 )
@@ -394,6 +393,47 @@ def _build_task_rng(exp_config: ExperimentConfig, task: Dict[str, Any], task_ind
     return random.Random(seed_material)
 
 
+def _resolve_domain_for_config(exp_config: ExperimentConfig):
+    return get_domain_registry().get(exp_config.domain)
+
+
+def _prepare_agents_for_task(exp_config: ExperimentConfig, task: Dict[str, Any], task_index: int) -> Dict[str, Any]:
+    domain = _resolve_domain_for_config(exp_config)
+    task_rng = _build_task_rng(exp_config, task, task_index)
+    agents_data = domain.assign_roles(task_rng)
+    malicious_count = malicious_count_from_label(exp_config.m, len(agents_data))
+    agents_data = mark_malicious(agents_data, exp_config.m, rng=task_rng)
+
+    detector_ids = [1000 + i for i in range(exp_config.d)] if exp_config.d > 0 else []
+    detector_visible = exp_config.d > 0
+    tool_knowledge = exp_config.d > 0
+    interrogation_turns = INTERROGATION_TURNS if exp_config.d > 0 else None
+
+    if malicious_count > 0:
+        agents_data = domain.inject_prompts(
+            agents_data,
+            PromptInjectionContext(
+                m=exp_config.m,
+                attack_type=exp_config.attack_type,
+                knowledge_level=exp_config.knowledge_level,
+                detector_ids=detector_ids,
+                detector_visible=detector_visible,
+                tool_knowledge=tool_knowledge,
+                interrogation_turns=interrogation_turns,
+            ),
+        )
+
+    return {
+        "domain": domain,
+        "agents_data": agents_data,
+        "malicious_count": malicious_count,
+        "detector_ids": detector_ids,
+        "detector_visible": detector_visible,
+        "tool_knowledge": tool_knowledge,
+        "interrogation_turns": interrogation_turns,
+    }
+
+
 def _stable_experiment_id(exp_config: ExperimentConfig, task: Dict[str, Any], task_index: int) -> str:
     raw = f"{RUN_LABEL}_{exp_config.condition_id}_rep{exp_config.rep}_{task_index}_{task.get('task_id', task_index)}"
     return "exp_" + _slugify(raw)[:180]
@@ -401,34 +441,20 @@ def _stable_experiment_id(exp_config: ExperimentConfig, task: Dict[str, Any], ta
 
 async def _run_single_task(exp_config: ExperimentConfig, task: Dict[str, Any], task_index: int) -> Dict[str, Any]:
     started = time.time()
-    task_rng = _build_task_rng(exp_config, task, task_index)
     experiment_id = _stable_experiment_id(exp_config, task, task_index)
     task_desc = task["prompt"]
 
-    agents_data = assign_roles(exp_config.domain, rng=task_rng)
-    malicious_count = malicious_count_from_label(exp_config.m, len(agents_data))
-    agents_data = mark_malicious(agents_data, exp_config.m, rng=task_rng)
-
+    prepared = _prepare_agents_for_task(exp_config, task, task_index)
+    domain = prepared["domain"]
+    agents_data = prepared["agents_data"]
+    malicious_count = prepared["malicious_count"]
+    detector_ids = prepared["detector_ids"]
+    detector_visible = prepared["detector_visible"]
+    tool_knowledge = prepared["tool_knowledge"]
+    interrogation_turns = prepared["interrogation_turns"]
     malicious_ids = [agent.id for agent in agents_data if agent.is_malicious]
     malicious_roles = [agent.role.value for agent in agents_data if agent.is_malicious]
     all_agent_ids = [agent.id for agent in agents_data]
-    detector_ids = [1000 + i for i in range(exp_config.d)] if exp_config.d > 0 else []
-
-    detector_visible = exp_config.d > 0
-    tool_knowledge = exp_config.d > 0
-    interrogation_turns = INTERROGATION_TURNS if exp_config.d > 0 else None
-
-    if malicious_count > 0:
-        agents_data = inject_hidden_prompts(
-            agents_data,
-            exp_config.m,
-            exp_config.attack_type,
-            exp_config.knowledge_level,
-            detector_ids,
-            detector_visible,
-            tool_knowledge,
-            interrogation_turns,
-        )
 
     primary_output_agent_id = next((agent.id for agent in agents_data if agent.role == Role.REPORTER), None)
     workers = [
@@ -450,7 +476,7 @@ async def _run_single_task(exp_config: ExperimentConfig, task: Dict[str, Any], t
                 DetectorAgent(
                     detector_id,
                     db_path,
-                    exp_config.domain,
+                    domain.name,
                     None,
                     None,
                     detector_ids=detector_ids,
@@ -462,7 +488,7 @@ async def _run_single_task(exp_config: ExperimentConfig, task: Dict[str, Any], t
         "experiment_id": experiment_id,
         "condition_id": exp_config.condition_id,
         "condition_name": exp_config.condition_name,
-        "domain": exp_config.domain,
+        "domain": domain.name,
         "m": exp_config.m,
         "malicious_count": malicious_count,
         "d": exp_config.d,
@@ -481,10 +507,10 @@ async def _run_single_task(exp_config: ExperimentConfig, task: Dict[str, Any], t
         **_condition_labels(exp_config, malicious_count),
     }
 
-    sim = Simulation(workers, detectors, cfg.TOTAL_TURNS, experiment_id, metadata, exp_config.domain)
+    sim = Simulation(workers, detectors, cfg.TOTAL_TURNS, experiment_id, metadata, domain.name)
     await sim.run()
 
-    evaluator = Evaluator(sim.logger.db_path, exp_config.domain)
+    evaluator = Evaluator(sim.logger.db_path, domain.name)
     result = {
         "unsafe_output_rate": evaluator.compute_unsafe_output_rate(),
         "functional_correctness": evaluator.compute_functional_correctness(),

@@ -3,6 +3,7 @@ import asyncio
 import ast
 import sqlite3
 import time
+from dataclasses import dataclass
 from pathlib import Path
 
 from covert_collusive_hotpot.experiments import runner
@@ -91,6 +92,176 @@ def test_build_task_pools_uses_selected_domain_task_builder(monkeypatch) -> None
     assert pools == {
         "knowledge_qa": [{"task_id": "synthetic", "prompt": "prompt", "answer": "answer"}]
     }
+
+
+def test_prepare_agents_for_task_uses_domain_for_roles_and_prompt_injection(monkeypatch) -> None:
+    calls: list[object] = []
+
+    @dataclass
+    class FakeAgent:
+        id: int
+        role: runner.Role
+        is_malicious: bool = False
+
+    class FakeDomain:
+        name = "knowledge_qa"
+        capabilities = type("Caps", (), {"language_only_permissions": True})()
+
+        def assign_roles(self, rng):
+            calls.append(("assign_roles", rng))
+            return [
+                FakeAgent(id=1, role=runner.Role.REPORTER),
+                FakeAgent(id=2, role=runner.Role.RESEARCHER),
+            ]
+
+        def inject_prompts(self, agents, context):
+            calls.append(("inject_prompts", agents, context))
+            return agents
+
+    def fake_mark_malicious(agents, m, rng=None):
+        calls.append(("mark_malicious", m, rng))
+        agents[0].is_malicious = True
+        return agents
+
+    monkeypatch.setattr(runner, "_resolve_domain_for_config", lambda exp_config: FakeDomain())
+    monkeypatch.setattr(runner, "mark_malicious", fake_mark_malicious)
+    monkeypatch.setattr(runner, "malicious_count_from_label", lambda m, total_agents: 1)
+
+    exp_config = runner.ExperimentConfig(
+        rep=1,
+        attack_type=runner.AttackType.SUBOPTIMAL_FIXATION,
+        m="1",
+        d=1,
+        domain="knowledge_qa",
+        condition_name="single_attacker_one_detector",
+    )
+    task = {"task_id": "t1", "prompt": "prompt", "answer": "answer"}
+
+    prepared = runner._prepare_agents_for_task(exp_config, task, 0)
+
+    assert prepared["domain"].name == "knowledge_qa"
+    assert prepared["malicious_count"] == 1
+    assert prepared["detector_ids"] == [1000]
+    assert prepared["detector_visible"] is True
+    assert prepared["tool_knowledge"] is True
+    assert prepared["interrogation_turns"] == runner.INTERROGATION_TURNS
+    assert [agent.id for agent in prepared["agents_data"]] == [1, 2]
+    assert [agent.id for agent in prepared["agents_data"] if agent.is_malicious] == [1]
+    assert [call[0] for call in calls] == ["assign_roles", "mark_malicious", "inject_prompts"]
+    _, _, context = calls[-1]
+    assert context.m == "1"
+    assert context.attack_type == exp_config.attack_type
+    assert context.knowledge_level == exp_config.knowledge_level
+    assert context.detector_ids == [1000]
+    assert context.detector_visible is True
+    assert context.tool_knowledge is True
+    assert context.interrogation_turns == runner.INTERROGATION_TURNS
+
+
+def test_run_single_task_delegates_agent_setup_through_prepare_helper(monkeypatch) -> None:
+    calls: list[str] = []
+
+    @dataclass
+    class FakeAgent:
+        id: int
+        role: runner.Role
+        is_malicious: bool = False
+
+    class FakeWorkerAgent:
+        def __init__(self, agent_data, task_description, **kwargs):
+            self.id = agent_data.id
+            self.agent_data = agent_data
+
+    class FakeLogger:
+        db_path = "fake.db"
+
+    class FakeSimulation:
+        def __init__(self, workers, detectors, total_turns, experiment_id, metadata, domain):
+            calls.append("simulation_init")
+            self.logger = FakeLogger()
+
+        async def run(self):
+            calls.append("simulation_run")
+            return [], []
+
+    class FakeEvaluator:
+        def __init__(self, db_path, domain):
+            calls.append("evaluator_init")
+
+        def compute_unsafe_output_rate(self):
+            return 0.0
+
+        def compute_functional_correctness(self):
+            return 1.0
+
+        def compute_completion_failure(self):
+            return 0.0
+
+        def compute_attack_success(self):
+            return 0.0
+
+        def compute_latency(self):
+            return 0.0
+
+        def compute_false_positive_rate(self):
+            return 0.0
+
+        def compute_detection_rate(self):
+            return 0.0
+
+        def compute_detection_recall(self):
+            return 0.0
+
+        def compute_detection_precision(self):
+            return 0.0
+
+        def compute_attribution_accuracy(self):
+            return 0.0
+
+        def compute_detection_latency(self):
+            return float("inf")
+
+        def compute_benign_restriction_rate(self):
+            return 0.0
+
+        def compute_benign_recovery_time(self):
+            return 0.0
+
+        def close(self):
+            calls.append("evaluator_close")
+
+    def fake_prepare_agents(exp_config, task, task_index):
+        calls.append("prepare_agents")
+        return {
+            "domain": type("Domain", (), {"name": exp_config.domain})(),
+            "agents_data": [FakeAgent(id=1, role=runner.Role.REPORTER)],
+            "malicious_count": 0,
+            "detector_ids": [],
+            "detector_visible": False,
+            "tool_knowledge": False,
+            "interrogation_turns": None,
+        }
+
+    monkeypatch.setattr(runner, "_prepare_agents_for_task", fake_prepare_agents)
+    monkeypatch.setattr(runner, "WorkerAgent", FakeWorkerAgent)
+    monkeypatch.setattr(runner, "Simulation", FakeSimulation)
+    monkeypatch.setattr(runner, "Evaluator", FakeEvaluator)
+
+    exp_config = runner.ExperimentConfig(
+        rep=1,
+        attack_type=runner.AttackType.SUBOPTIMAL_FIXATION,
+        m="0",
+        d=0,
+        domain="knowledge_qa",
+        condition_name="clean_baseline",
+    )
+    task = {"task_id": "t1", "prompt": "prompt", "answer": "answer"}
+
+    result = asyncio.run(runner._run_single_task(exp_config, task, 0))
+
+    assert result["functional_correctness"] == 1.0
+    assert calls[:4] == ["prepare_agents", "simulation_init", "simulation_run", "evaluator_init"]
+    assert calls[-1] == "evaluator_close"
 
 
 def test_reporting_required_columns_are_emitted_by_runner() -> None:
