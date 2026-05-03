@@ -1,5 +1,8 @@
+import os
 from importlib import reload
 from typing import get_type_hints
+
+import pytest
 
 from covert_collusive_hotpot.core import config as cfg
 from covert_collusive_hotpot.domains.base import (
@@ -11,6 +14,22 @@ from covert_collusive_hotpot.domains.base import (
 from covert_collusive_hotpot.domains import registry as registry_module
 from covert_collusive_hotpot.domains.knowledge_qa import KnowledgeQADomain
 from covert_collusive_hotpot.domains.registry import DomainRegistry, get_domain_registry
+
+
+@pytest.fixture(autouse=True)
+def restore_config_and_registry_module_state() -> None:
+    original_domain = os.environ.get("DOMAIN")
+    reload(cfg)
+    reload(registry_module)
+
+    yield
+
+    if original_domain is None:
+        os.environ.pop("DOMAIN", None)
+    else:
+        os.environ["DOMAIN"] = original_domain
+    reload(cfg)
+    reload(registry_module)
 
 
 class DummyReportingAdapter:
@@ -195,6 +214,12 @@ def test_global_registry_uses_shared_config_default_domain(monkeypatch) -> None:
     registry = module.get_domain_registry()
 
     assert registry.default_domain_name() == "code_synthesis"
+
+
+def test_global_registry_default_is_canonical_after_override_tests() -> None:
+    registry = get_domain_registry()
+
+    assert registry.default_domain_name() == "knowledge_qa"
 
 
 def test_knowledge_qa_domain_capabilities_are_exposed() -> None:
