@@ -1,9 +1,9 @@
 from __future__ import annotations
 
+from covert_collusive_hotpot.core.config import DEFAULT_DOMAIN
 from covert_collusive_hotpot.domains.base import DomainSpec
 
 
-_DEFAULT_DOMAIN_NAME = "knowledge_qa"
 _domain_registry: DomainRegistry | None = None
 
 
@@ -47,7 +47,7 @@ def get_domain_registry() -> DomainRegistry:
     if _domain_registry is None:
         from covert_collusive_hotpot.domains.knowledge_qa import KnowledgeQADomain
 
-        registry = DomainRegistry(default_domain=_DEFAULT_DOMAIN_NAME)
+        registry = DomainRegistry(default_domain=DEFAULT_DOMAIN)
         registry.register(KnowledgeQADomain())
         _domain_registry = registry
 

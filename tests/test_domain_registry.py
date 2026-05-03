@@ -8,6 +8,7 @@ from covert_collusive_hotpot.domains.base import (
     PromptInjectionContext,
     ReportingAdapter,
 )
+from covert_collusive_hotpot.domains import registry as registry_module
 from covert_collusive_hotpot.domains.knowledge_qa import KnowledgeQADomain
 from covert_collusive_hotpot.domains.registry import DomainRegistry, get_domain_registry
 
@@ -185,6 +186,15 @@ def test_config_uses_canonical_default_for_whitespace_domain(monkeypatch) -> Non
     module = reload(cfg)
 
     assert module.DEFAULT_DOMAIN == "knowledge_qa"
+
+
+def test_global_registry_uses_shared_config_default_domain(monkeypatch) -> None:
+    monkeypatch.setenv("DOMAIN", "code_synthesis")
+    reload(cfg)
+    module = reload(registry_module)
+    registry = module.get_domain_registry()
+
+    assert registry.default_domain_name() == "code_synthesis"
 
 
 def test_knowledge_qa_domain_capabilities_are_exposed() -> None:
