@@ -507,7 +507,15 @@ async def _run_single_task(exp_config: ExperimentConfig, task: Dict[str, Any], t
         **_condition_labels(exp_config, malicious_count),
     }
 
-    sim = Simulation(workers, detectors, cfg.TOTAL_TURNS, experiment_id, metadata, domain.name)
+    sim = Simulation(
+        workers,
+        detectors,
+        cfg.TOTAL_TURNS,
+        experiment_id,
+        metadata,
+        domain.name,
+        domain.capabilities,
+    )
     await sim.run()
 
     evaluator = Evaluator(sim.logger.db_path, domain.name)

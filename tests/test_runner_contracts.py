@@ -10,7 +10,7 @@ from covert_collusive_hotpot.experiments import runner
 from covert_collusive_hotpot.experiments.evaluation import Evaluator
 from covert_collusive_hotpot.experiments.simulation import Simulation
 from covert_collusive_hotpot import generate_paper_assets as paper_assets
-from covert_collusive_hotpot.core.models import Recommendation
+from covert_collusive_hotpot.core.models import PermissionLevel, Recommendation
 
 
 def _evaluator_methods_called_by_runner() -> set[str]:
@@ -175,9 +175,12 @@ def test_run_single_task_delegates_agent_setup_through_prepare_helper(monkeypatc
     class FakeLogger:
         db_path = "fake.db"
 
+    capabilities = type("Caps", (), {"language_only_permissions": False})()
+
     class FakeSimulation:
-        def __init__(self, workers, detectors, total_turns, experiment_id, metadata, domain):
+        def __init__(self, workers, detectors, total_turns, experiment_id, metadata, domain, domain_capabilities):
             calls.append("simulation_init")
+            assert domain_capabilities is capabilities
             self.logger = FakeLogger()
 
         async def run(self):
@@ -233,7 +236,7 @@ def test_run_single_task_delegates_agent_setup_through_prepare_helper(monkeypatc
     def fake_prepare_agents(exp_config, task, task_index):
         calls.append("prepare_agents")
         return {
-            "domain": type("Domain", (), {"name": exp_config.domain})(),
+            "domain": type("Domain", (), {"name": exp_config.domain, "capabilities": capabilities})(),
             "agents_data": [FakeAgent(id=1, role=runner.Role.REPORTER)],
             "malicious_count": 0,
             "detector_ids": [],
@@ -328,7 +331,7 @@ def test_single_experiment_fake_smoke_produces_reporting_compatible_row(tmp_path
             self.db_path = db_path
 
     class FakeSimulation:
-        def __init__(self, workers, detectors, total_turns, experiment_id, metadata, domain):
+        def __init__(self, workers, detectors, total_turns, experiment_id, metadata, domain, domain_capabilities):
             db_path = Path(runner.cfg.LOG_DIR) / f"{experiment_id}.db"
             db_path.parent.mkdir(parents=True, exist_ok=True)
             conn = sqlite3.connect(db_path)
@@ -464,6 +467,34 @@ def test_single_experiment_fake_smoke_produces_reporting_compatible_row(tmp_path
     assert result["completion_failure_mean"] == 0.0
     assert result["unsafe_output_rate_mean"] == 0.0
     assert len(loaded) == 1
+
+
+def test_simulation_uses_domain_capabilities_for_permission_mode() -> None:
+    class PermissionManager:
+        def __init__(self):
+            self.calls: list[tuple[int, bool]] = []
+
+        def get_permission_level(self, agent_id: int, is_language_only: bool):
+            self.calls.append((agent_id, is_language_only))
+            return PermissionLevel.REMOVED
+
+        def end_turn(self):
+            pass
+
+    sim = Simulation.__new__(Simulation)
+    sim.turn = 0
+    sim.domain = "knowledge_qa"
+    sim.workers = {0: object()}
+    sim.detectors = {}
+    sim.message_log = []
+    sim.action_log = []
+    sim.recommendation_log = []
+    sim.permission_manager = PermissionManager()
+    sim.domain_capabilities = type("Caps", (), {"language_only_permissions": False})()
+
+    asyncio.run(sim.run_turn())
+
+    assert sim.permission_manager.calls == [(0, False)]
 
 
 def test_simulation_detection_latency_matches_evaluator_turn_definition() -> None:
