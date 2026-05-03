@@ -32,7 +32,6 @@ from covert_collusive_hotpot.core import config as cfg
 from covert_collusive_hotpot.core.models import AttackType, KnowledgeLevel, Role
 from covert_collusive_hotpot.domains.registry import get_domain_registry
 from covert_collusive_hotpot.experiments.evaluation import Evaluator
-from covert_collusive_hotpot.experiments.hotpot_loader import load_hotpotqa_tasks
 from covert_collusive_hotpot.experiments.prompt_injection import inject_hidden_prompts
 from covert_collusive_hotpot.experiments.role_assignment import (
     assign_roles,
@@ -313,7 +312,8 @@ async def _append_task_progress(jsonl_path: str, lock: asyncio.Lock, task_key: s
 
 
 def _build_task_pools(domain_name: str, seed: Optional[int] = None) -> Dict[str, List[Dict[str, Any]]]:
-    return {domain_name: load_hotpotqa_tasks(cfg.HOTPOT_QA_TASKS, seed=seed)}
+    domain = get_domain_registry().get(domain_name)
+    return {domain.name: domain.build_task_pool(cfg.HOTPOT_QA_TASKS, seed=seed)}
 
 
 def _collect_numeric(results: List[Dict[str, Any]], key: str) -> List[float]:

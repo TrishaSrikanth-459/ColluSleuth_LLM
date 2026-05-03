@@ -66,6 +66,33 @@ def test_generate_configs_writes_selected_domain() -> None:
     assert {config.domain for config in configs} == {"knowledge_qa"}
 
 
+def test_build_task_pools_uses_selected_domain_task_builder(monkeypatch) -> None:
+    monkeypatch.setattr(runner.cfg, "HOTPOT_QA_TASKS", 7)
+    calls: dict[str, object] = {}
+
+    class FakeDomain:
+        name = "knowledge_qa"
+
+        def build_task_pool(self, task_count: int, seed: int | None):
+            calls["task_count"] = task_count
+            calls["seed"] = seed
+            return [{"task_id": "synthetic", "prompt": "prompt", "answer": "answer"}]
+
+    class FakeRegistry:
+        def get(self, name: str):
+            calls["domain_name"] = name
+            return FakeDomain()
+
+    monkeypatch.setattr(runner, "get_domain_registry", lambda: FakeRegistry())
+
+    pools = runner._build_task_pools(domain_name="knowledge_qa", seed=123)
+
+    assert calls == {"domain_name": "knowledge_qa", "task_count": 7, "seed": 123}
+    assert pools == {
+        "knowledge_qa": [{"task_id": "synthetic", "prompt": "prompt", "answer": "answer"}]
+    }
+
+
 def test_reporting_required_columns_are_emitted_by_runner() -> None:
     output_fields = set(runner.OUTPUT_FIELDNAMES)
     required = {
