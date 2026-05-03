@@ -49,5 +49,12 @@ class DomainSpec(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def reporting_adapter(self) -> type[ReportingAdapter]:
+    def reporting_adapter(
+        self,
+        input_csv_path: str,
+        output_table_dir: str,
+        output_fig_dir: str,
+        expected_task_count: int,
+        require_full_task_counts: bool,
+    ) -> ReportingAdapter:
         raise NotImplementedError

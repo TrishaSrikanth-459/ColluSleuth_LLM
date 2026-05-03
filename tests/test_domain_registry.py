@@ -10,6 +10,20 @@ from covert_collusive_hotpot.domains.registry import DomainRegistry
 
 
 class DummyReportingAdapter:
+    def __init__(
+        self,
+        input_csv_path: str,
+        output_table_dir: str,
+        output_fig_dir: str,
+        expected_task_count: int,
+        require_full_task_counts: bool,
+    ):
+        self.input_csv_path = input_csv_path
+        self.output_table_dir = output_table_dir
+        self.output_fig_dir = output_fig_dir
+        self.expected_task_count = expected_task_count
+        self.require_full_task_counts = require_full_task_counts
+
     def run(self) -> None:
         return None
 
@@ -31,8 +45,21 @@ class DummyDomain(DomainSpec):
         assert isinstance(context, PromptInjectionContext)
         return agents
 
-    def reporting_adapter(self):
-        return DummyReportingAdapter
+    def reporting_adapter(
+        self,
+        input_csv_path: str,
+        output_table_dir: str,
+        output_fig_dir: str,
+        expected_task_count: int,
+        require_full_task_counts: bool,
+    ):
+        return DummyReportingAdapter(
+            input_csv_path=input_csv_path,
+            output_table_dir=output_table_dir,
+            output_fig_dir=output_fig_dir,
+            expected_task_count=expected_task_count,
+            require_full_task_counts=require_full_task_counts,
+        )
 
 
 def test_domain_spec_is_abstract() -> None:
@@ -47,19 +74,33 @@ def test_domain_spec_is_abstract() -> None:
         raise AssertionError("Expected DomainSpec instantiation to fail")
 
 
-def test_domain_spec_reporting_adapter_contract_is_factory_typed() -> None:
+def test_domain_spec_reporting_adapter_contract_is_instance_typed() -> None:
     hints = get_type_hints(DomainSpec.reporting_adapter)
 
-    assert hints["return"] == type[ReportingAdapter]
+    assert hints["input_csv_path"] is str
+    assert hints["output_table_dir"] is str
+    assert hints["output_fig_dir"] is str
+    assert hints["expected_task_count"] is int
+    assert hints["require_full_task_counts"] is bool
+    assert hints["return"] is ReportingAdapter
 
 
-def test_dummy_domain_reporting_adapter_returns_factory() -> None:
+def test_dummy_domain_reporting_adapter_returns_configured_instance() -> None:
     domain = DummyDomain("knowledge_qa")
-    adapter_type = domain.reporting_adapter()
-    adapter = adapter_type()
+    adapter = domain.reporting_adapter(
+        input_csv_path="results.csv",
+        output_table_dir="tables",
+        output_fig_dir="figures",
+        expected_task_count=100,
+        require_full_task_counts=True,
+    )
 
-    assert adapter_type is DummyReportingAdapter
     assert isinstance(adapter, ReportingAdapter)
+    assert adapter.input_csv_path == "results.csv"
+    assert adapter.output_table_dir == "tables"
+    assert adapter.output_fig_dir == "figures"
+    assert adapter.expected_task_count == 100
+    assert adapter.require_full_task_counts is True
 
 
 def test_registry_exposes_registered_domain_names() -> None:
