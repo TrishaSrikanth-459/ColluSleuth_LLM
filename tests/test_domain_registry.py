@@ -1,5 +1,7 @@
+from importlib import reload
 from typing import get_type_hints
 
+from covert_collusive_hotpot.core import config as cfg
 from covert_collusive_hotpot.domains.base import (
     DomainCapabilities,
     DomainSpec,
@@ -162,6 +164,20 @@ def test_global_registry_defaults_to_knowledge_qa() -> None:
 
     assert registry.default_domain_name() == "knowledge_qa"
     assert "knowledge_qa" in registry.names()
+
+
+def test_config_default_domain_is_knowledge_qa(monkeypatch) -> None:
+    monkeypatch.delenv("DOMAIN", raising=False)
+    module = reload(cfg)
+
+    assert module.DEFAULT_DOMAIN == "knowledge_qa"
+
+
+def test_config_reads_domain_override(monkeypatch) -> None:
+    monkeypatch.setenv("DOMAIN", "knowledge_qa")
+    module = reload(cfg)
+
+    assert module.DEFAULT_DOMAIN == "knowledge_qa"
 
 
 def test_knowledge_qa_domain_capabilities_are_exposed() -> None:
