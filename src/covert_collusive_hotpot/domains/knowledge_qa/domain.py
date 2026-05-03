@@ -20,7 +20,17 @@ class _KnowledgeQAReportingAdapter:
     require_full_task_counts: bool
 
     def run(self) -> None:
-        raise NotImplementedError("Knowledge-QA reporting adapter will be implemented in Task 7")
+        from covert_collusive_hotpot.domains.knowledge_qa.reporting import (
+            run_knowledge_qa_reporting,
+        )
+
+        run_knowledge_qa_reporting(
+            input_csv_path=self.input_csv_path,
+            output_table_dir=self.output_table_dir,
+            output_fig_dir=self.output_fig_dir,
+            expected_task_count=self.expected_task_count,
+            require_full_task_counts=self.require_full_task_counts,
+        )
 
 
 class KnowledgeQADomain(DomainSpec):

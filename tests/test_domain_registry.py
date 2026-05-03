@@ -6,6 +6,7 @@ from covert_collusive_hotpot.domains.base import (
     PromptInjectionContext,
     ReportingAdapter,
 )
+from covert_collusive_hotpot.domains.knowledge_qa import KnowledgeQADomain
 from covert_collusive_hotpot.domains.registry import DomainRegistry, get_domain_registry
 
 
@@ -169,3 +170,41 @@ def test_knowledge_qa_domain_capabilities_are_exposed() -> None:
 
     assert domain.name == "knowledge_qa"
     assert domain.capabilities.language_only_permissions is True
+
+
+def test_knowledge_qa_reporting_adapter_runs_reporting_pipeline(monkeypatch) -> None:
+    calls: list[tuple[str, str, str, int, bool]] = []
+
+    def fake_run_reporting(
+        input_csv_path: str,
+        output_table_dir: str,
+        output_fig_dir: str,
+        expected_task_count: int,
+        require_full_task_counts: bool,
+    ) -> None:
+        calls.append(
+            (
+                input_csv_path,
+                output_table_dir,
+                output_fig_dir,
+                expected_task_count,
+                require_full_task_counts,
+            )
+        )
+
+    monkeypatch.setattr(
+        "covert_collusive_hotpot.domains.knowledge_qa.reporting.run_knowledge_qa_reporting",
+        fake_run_reporting,
+    )
+
+    adapter = KnowledgeQADomain().reporting_adapter(
+        input_csv_path="results.csv",
+        output_table_dir="tables",
+        output_fig_dir="figures",
+        expected_task_count=100,
+        require_full_task_counts=True,
+    )
+
+    adapter.run()
+
+    assert calls == [("results.csv", "tables", "figures", 100, True)]
