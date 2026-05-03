@@ -497,6 +497,33 @@ def test_simulation_uses_domain_capabilities_for_permission_mode() -> None:
     assert sim.permission_manager.calls == [(0, False)]
 
 
+def test_simulation_defaults_to_non_language_only_permissions_without_capabilities() -> None:
+    class PermissionManager:
+        def __init__(self):
+            self.calls: list[tuple[int, bool]] = []
+
+        def get_permission_level(self, agent_id: int, is_language_only: bool):
+            self.calls.append((agent_id, is_language_only))
+            return PermissionLevel.REMOVED
+
+        def end_turn(self):
+            pass
+
+    sim = Simulation.__new__(Simulation)
+    sim.turn = 0
+    sim.domain = None
+    sim.workers = {0: object()}
+    sim.detectors = {}
+    sim.message_log = []
+    sim.action_log = []
+    sim.recommendation_log = []
+    sim.permission_manager = PermissionManager()
+
+    asyncio.run(sim.run_turn())
+
+    assert sim.permission_manager.calls == [(0, False)]
+
+
 def test_simulation_detection_latency_matches_evaluator_turn_definition() -> None:
     class AgentData:
         def __init__(self, is_malicious: bool):

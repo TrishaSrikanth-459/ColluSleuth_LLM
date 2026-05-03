@@ -101,8 +101,8 @@ class Simulation:
     def _is_language_only_permissions(self) -> bool:
         capabilities = getattr(self, "domain_capabilities", None)
         if capabilities is None:
-            return True
-        return bool(getattr(capabilities, "language_only_permissions", True))
+            return False
+        return bool(getattr(capabilities, "language_only_permissions", False))
 
     async def run_turn(self):
         self.turn += 1

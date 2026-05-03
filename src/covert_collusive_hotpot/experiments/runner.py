@@ -513,8 +513,8 @@ async def _run_single_task(exp_config: ExperimentConfig, task: Dict[str, Any], t
         cfg.TOTAL_TURNS,
         experiment_id,
         metadata,
-        domain.name,
-        domain.capabilities,
+        domain=domain.name,
+        domain_capabilities=domain.capabilities,
     )
     await sim.run()
 
