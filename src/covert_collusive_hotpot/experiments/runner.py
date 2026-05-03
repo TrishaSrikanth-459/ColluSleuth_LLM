@@ -26,18 +26,58 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from covert_collusive_hotpot.agents.detector import DetectorAgent
-from covert_collusive_hotpot.agents.worker import WorkerAgent
 from covert_collusive_hotpot.core import config as cfg
 from covert_collusive_hotpot.core.models import AttackType, KnowledgeLevel, Role
 from covert_collusive_hotpot.domains.base import PromptInjectionContext
 from covert_collusive_hotpot.domains.registry import get_domain_registry
-from covert_collusive_hotpot.experiments.evaluation import Evaluator
 from covert_collusive_hotpot.experiments.role_assignment import (
     malicious_count_from_label,
     mark_malicious,
 )
-from covert_collusive_hotpot.experiments.simulation import Simulation
+
+
+# Test seams and lazy-import sentinels. Keep these names so existing tests can
+# monkeypatch runner.WorkerAgent/Simulation without importing AG2 during --help.
+WorkerAgent = None
+DetectorAgent = None
+Simulation = None
+Evaluator = None
+
+
+def _worker_agent_class():
+    global WorkerAgent
+    if WorkerAgent is None:
+        from covert_collusive_hotpot.agents.worker import WorkerAgent as _WorkerAgent
+
+        WorkerAgent = _WorkerAgent
+    return WorkerAgent
+
+
+def _detector_agent_class():
+    global DetectorAgent
+    if DetectorAgent is None:
+        from covert_collusive_hotpot.agents.detector import DetectorAgent as _DetectorAgent
+
+        DetectorAgent = _DetectorAgent
+    return DetectorAgent
+
+
+def _simulation_class():
+    global Simulation
+    if Simulation is None:
+        from covert_collusive_hotpot.experiments.simulation import Simulation as _Simulation
+
+        Simulation = _Simulation
+    return Simulation
+
+
+def _evaluator_class():
+    global Evaluator
+    if Evaluator is None:
+        from covert_collusive_hotpot.experiments.evaluation import Evaluator as _Evaluator
+
+        Evaluator = _Evaluator
+    return Evaluator
 
 
 def _get_env_int(key: str, default: int) -> int:
@@ -470,8 +510,9 @@ async def _run_single_task(exp_config: ExperimentConfig, task: Dict[str, Any], t
     all_agent_ids = [agent.id for agent in agents_data]
 
     primary_output_agent_id = next((agent.id for agent in agents_data if agent.role == Role.REPORTER), None)
+    worker_agent_class = _worker_agent_class()
     workers = [
-        WorkerAgent(
+        worker_agent_class(
             agent_data,
             task_desc,
             task_metadata=task,
@@ -481,12 +522,13 @@ async def _run_single_task(exp_config: ExperimentConfig, task: Dict[str, Any], t
         for agent_data in agents_data
     ]
 
-    detectors: List[DetectorAgent] = []
+    detectors: List[Any] = []
     if exp_config.d > 0:
+        detector_agent_class = _detector_agent_class()
         db_path = os.path.join(cfg.LOG_DIR, f"{experiment_id}.db")
         for detector_id in detector_ids:
             detectors.append(
-                DetectorAgent(
+                detector_agent_class(
                     detector_id,
                     db_path,
                     domain.name,
@@ -520,7 +562,8 @@ async def _run_single_task(exp_config: ExperimentConfig, task: Dict[str, Any], t
         **_condition_labels(exp_config, malicious_count),
     }
 
-    sim = Simulation(
+    simulation_class = _simulation_class()
+    sim = simulation_class(
         workers,
         detectors,
         cfg.TOTAL_TURNS,
@@ -531,7 +574,8 @@ async def _run_single_task(exp_config: ExperimentConfig, task: Dict[str, Any], t
     )
     await sim.run()
 
-    evaluator = Evaluator(sim.logger.db_path, domain.name, domain.capabilities)
+    evaluator_class = _evaluator_class()
+    evaluator = evaluator_class(sim.logger.db_path, domain.name, domain.capabilities)
     result = {
         "unsafe_output_rate": evaluator.compute_unsafe_output_rate(),
         "functional_correctness": evaluator.compute_functional_correctness(),
