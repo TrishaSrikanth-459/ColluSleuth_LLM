@@ -24,6 +24,12 @@ dev = [
   "pytest>=7.0",
 ]
 
+[tool.pytest.ini_options]
+filterwarnings = [
+  "ignore:jsonschema.RefResolver is deprecated:DeprecationWarning:autogen.json_utils",
+  "ignore:Accessing jsonschema.__version__ is deprecated:DeprecationWarning:autogen.import_utils",
+]
+
 [tool.setuptools]
 package-dir = {"" = "src"}
 
