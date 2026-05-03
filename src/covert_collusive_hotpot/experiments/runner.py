@@ -518,7 +518,7 @@ async def _run_single_task(exp_config: ExperimentConfig, task: Dict[str, Any], t
     )
     await sim.run()
 
-    evaluator = Evaluator(sim.logger.db_path, domain.name)
+    evaluator = Evaluator(sim.logger.db_path, domain.name, domain.capabilities)
     result = {
         "unsafe_output_rate": evaluator.compute_unsafe_output_rate(),
         "functional_correctness": evaluator.compute_functional_correctness(),
