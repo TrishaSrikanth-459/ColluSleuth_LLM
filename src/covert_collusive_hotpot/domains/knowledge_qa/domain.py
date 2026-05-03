@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 from typing import Any
 
 from covert_collusive_hotpot.domains.base import (
@@ -9,28 +8,6 @@ from covert_collusive_hotpot.domains.base import (
     PromptInjectionContext,
     ReportingAdapter,
 )
-
-
-@dataclass
-class _KnowledgeQAReportingAdapter:
-    input_csv_path: str
-    output_table_dir: str
-    output_fig_dir: str
-    expected_task_count: int
-    require_full_task_counts: bool
-
-    def run(self) -> None:
-        from covert_collusive_hotpot.domains.knowledge_qa.reporting import (
-            run_knowledge_qa_reporting,
-        )
-
-        run_knowledge_qa_reporting(
-            input_csv_path=self.input_csv_path,
-            output_table_dir=self.output_table_dir,
-            output_fig_dir=self.output_fig_dir,
-            expected_task_count=self.expected_task_count,
-            require_full_task_counts=self.require_full_task_counts,
-        )
 
 
 class KnowledgeQADomain(DomainSpec):
@@ -76,7 +53,9 @@ class KnowledgeQADomain(DomainSpec):
         expected_task_count: int,
         require_full_task_counts: bool,
     ) -> ReportingAdapter:
-        return _KnowledgeQAReportingAdapter(
+        from covert_collusive_hotpot.domains.knowledge_qa.reporting import KnowledgeQAReportingAdapter
+
+        return KnowledgeQAReportingAdapter(
             input_csv_path=input_csv_path,
             output_table_dir=output_table_dir,
             output_fig_dir=output_fig_dir,

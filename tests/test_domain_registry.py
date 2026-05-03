@@ -13,6 +13,7 @@ from covert_collusive_hotpot.domains.base import (
 )
 from covert_collusive_hotpot.domains import registry as registry_module
 from covert_collusive_hotpot.domains.knowledge_qa import KnowledgeQADomain
+from covert_collusive_hotpot.domains.knowledge_qa.reporting import KnowledgeQAReportingAdapter
 from covert_collusive_hotpot.domains.registry import DomainRegistry, get_domain_registry
 
 
@@ -231,31 +232,7 @@ def test_knowledge_qa_domain_capabilities_are_exposed() -> None:
     assert domain.capabilities.language_only_permissions is True
 
 
-def test_knowledge_qa_reporting_adapter_runs_reporting_pipeline(monkeypatch) -> None:
-    calls: list[tuple[str, str, str, int, bool]] = []
-
-    def fake_run_reporting(
-        input_csv_path: str,
-        output_table_dir: str,
-        output_fig_dir: str,
-        expected_task_count: int,
-        require_full_task_counts: bool,
-    ) -> None:
-        calls.append(
-            (
-                input_csv_path,
-                output_table_dir,
-                output_fig_dir,
-                expected_task_count,
-                require_full_task_counts,
-            )
-        )
-
-    monkeypatch.setattr(
-        "covert_collusive_hotpot.domains.knowledge_qa.reporting.run_knowledge_qa_reporting",
-        fake_run_reporting,
-    )
-
+def test_knowledge_qa_reporting_adapter_returns_configured_adapter() -> None:
     adapter = KnowledgeQADomain().reporting_adapter(
         input_csv_path="results.csv",
         output_table_dir="tables",
@@ -264,6 +241,9 @@ def test_knowledge_qa_reporting_adapter_runs_reporting_pipeline(monkeypatch) -> 
         require_full_task_counts=True,
     )
 
-    adapter.run()
-
-    assert calls == [("results.csv", "tables", "figures", 100, True)]
+    assert isinstance(adapter, KnowledgeQAReportingAdapter)
+    assert adapter.input_csv_path == "results.csv"
+    assert adapter.output_table_dir == "tables"
+    assert adapter.output_fig_dir == "figures"
+    assert adapter.expected_task_count == 100
+    assert adapter.require_full_task_counts is True

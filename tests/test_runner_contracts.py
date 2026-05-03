@@ -188,8 +188,9 @@ def test_run_single_task_delegates_agent_setup_through_prepare_helper(monkeypatc
             return [], []
 
     class FakeEvaluator:
-        def __init__(self, db_path, domain):
+        def __init__(self, db_path, domain, domain_capabilities):
             calls.append("evaluator_init")
+            assert domain_capabilities is capabilities
 
         def compute_unsafe_output_rate(self):
             return 0.0
