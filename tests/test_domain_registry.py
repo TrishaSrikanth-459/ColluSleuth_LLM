@@ -180,6 +180,13 @@ def test_config_reads_domain_override(monkeypatch) -> None:
     assert module.DEFAULT_DOMAIN == "knowledge_qa"
 
 
+def test_config_uses_canonical_default_for_whitespace_domain(monkeypatch) -> None:
+    monkeypatch.setenv("DOMAIN", "   ")
+    module = reload(cfg)
+
+    assert module.DEFAULT_DOMAIN == "knowledge_qa"
+
+
 def test_knowledge_qa_domain_capabilities_are_exposed() -> None:
     registry = get_domain_registry()
     domain = registry.get("knowledge_qa")
