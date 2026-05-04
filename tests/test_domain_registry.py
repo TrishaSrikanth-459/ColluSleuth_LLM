@@ -267,3 +267,15 @@ def test_domain_spec_detector_tools_default_returns_empty_list() -> None:
 def test_domain_spec_evidence_validator_default_returns_none() -> None:
     domain = KnowledgeQADomain()
     assert domain.evidence_validator() is None
+
+
+def test_global_registry_contains_code_synthesis() -> None:
+    registry = get_domain_registry()
+    assert "code_synthesis" in registry.names()
+
+
+def test_code_synthesis_domain_capabilities() -> None:
+    from covert_collusive_hotpot.domains.code_synthesis import CodeSynthesisDomain
+    domain = CodeSynthesisDomain()
+    assert domain.capabilities.language_only_permissions is False
+    assert domain.capabilities.deferred_functional_correctness is True

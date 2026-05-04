@@ -47,11 +47,14 @@ def get_domain_registry() -> DomainRegistry:
 
     if _domain_registry is None:
         from covert_collusive_hotpot.domains.knowledge_qa import KnowledgeQADomain
+        from covert_collusive_hotpot.domains.code_synthesis import CodeSynthesisDomain
 
         knowledge_qa = KnowledgeQADomain()
+        code_synthesis = CodeSynthesisDomain()
         default_domain = DEFAULT_DOMAIN if DEFAULT_DOMAIN == knowledge_qa.name else _BOOTSTRAP_DEFAULT_DOMAIN
         registry = DomainRegistry(default_domain=default_domain)
         registry.register(knowledge_qa)
+        registry.register(code_synthesis)
         _domain_registry = registry
 
     return _domain_registry

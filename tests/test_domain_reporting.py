@@ -166,7 +166,7 @@ def test_cli_help_includes_domain_without_running_reporting(capsys) -> None:
 
 
 def test_resolve_reporting_adapter_surfaces_unknown_domain_error(tmp_path) -> None:
-    with pytest.raises(ValueError, match="Unknown domain 'missing'. Supported domains: knowledge_qa"):
+    with pytest.raises(ValueError, match="Unknown domain 'missing'. Supported domains:"):
         paper_assets.resolve_reporting_adapter(
             "missing",
             input_csv_path=str(tmp_path / "results.csv"),
