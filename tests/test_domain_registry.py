@@ -247,3 +247,23 @@ def test_knowledge_qa_reporting_adapter_returns_configured_adapter() -> None:
     assert adapter.output_fig_dir == "figures"
     assert adapter.expected_task_count == 100
     assert adapter.require_full_task_counts is True
+
+
+def test_domain_capabilities_deferred_correctness_defaults_false() -> None:
+    caps = DomainCapabilities(language_only_permissions=True)
+    assert caps.deferred_functional_correctness is False
+
+
+def test_domain_capabilities_deferred_correctness_can_be_set() -> None:
+    caps = DomainCapabilities(language_only_permissions=False, deferred_functional_correctness=True)
+    assert caps.deferred_functional_correctness is True
+
+
+def test_domain_spec_detector_tools_default_returns_empty_list() -> None:
+    domain = KnowledgeQADomain()
+    assert domain.detector_tools(object()) == []
+
+
+def test_domain_spec_evidence_validator_default_returns_none() -> None:
+    domain = KnowledgeQADomain()
+    assert domain.evidence_validator() is None
