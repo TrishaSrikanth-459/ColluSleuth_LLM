@@ -519,6 +519,7 @@ async def _run_single_task(exp_config: ExperimentConfig, task: Dict[str, Any], t
             task_metadata=task,
             detector_visible=detector_visible,
             detector_ids=detector_ids,
+            domain=domain.name,
         )
         for agent_data in agents_data
     ]
@@ -831,9 +832,10 @@ def main() -> None:
     if not args.no_shuffle:
         random.shuffle(configs)
 
-    total_task_runs = len(configs) * cfg.HOTPOT_QA_TASKS
-    print("=== Collusive Covert HotpotQA Experiment ===")
-    print(f"configs={len(configs)} tasks_per_config={cfg.HOTPOT_QA_TASKS} total_task_runs={total_task_runs}")
+    tasks_per_config = cfg.SWE_BENCH_TASKS if domain_name == "code_synthesis" else cfg.HOTPOT_QA_TASKS
+    total_task_runs = len(configs) * tasks_per_config
+    print(f"=== Collusive Covert Experiment [{domain_name}] ===")
+    print(f"configs={len(configs)} tasks_per_config={tasks_per_config} total_task_runs={total_task_runs}")
     print(f"domain={domain_name} turns={cfg.TOTAL_TURNS} max_tokens={cfg.MAX_TOKENS} model={cfg.MODEL_NAME} output={OUTPUT_CSV}")
     print(f"attack_types={[attack.value for attack in ATTACK_TYPES]}")
     print(f"conditions={[name for name, _m, _d in CONDITION_SPECS]}")
