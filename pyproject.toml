@@ -24,6 +24,9 @@ dev = [
   "pytest>=7.0",
 ]
 
+[project.scripts]
+evaluate-code-synthesis = "covert_collusive_hotpot.evaluate_code_synthesis:main"
+
 [tool.pytest.ini_options]
 filterwarnings = [
   "ignore:jsonschema.RefResolver is deprecated:DeprecationWarning:autogen.json_utils",

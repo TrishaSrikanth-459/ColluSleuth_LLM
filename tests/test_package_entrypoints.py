@@ -215,3 +215,22 @@ def test_legacy_experiment_wrapper_help_mentions_domain_flag() -> None:
 
     assert result.returncode == 0
     assert "--domain" in result.stdout
+
+
+def test_evaluate_code_synthesis_module_imports() -> None:
+    from covert_collusive_hotpot.evaluate_code_synthesis import build_arg_parser, main
+    parser = build_arg_parser()
+    assert parser is not None
+
+
+def test_evaluate_code_synthesis_main_raises_not_implemented() -> None:
+    import sys
+    from covert_collusive_hotpot.evaluate_code_synthesis import main
+    sys.argv = ["evaluate-code-synthesis", "--input", "x.csv", "--output", "y.csv"]
+    try:
+        main()
+        raise AssertionError("Expected NotImplementedError")
+    except NotImplementedError:
+        pass
+    finally:
+        sys.argv = sys.argv[:1]
