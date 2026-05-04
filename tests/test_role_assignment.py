@@ -19,9 +19,16 @@ def test_assign_roles_creates_exactly_one_reporter():
     assert reporter_count == 1
 
 
-def test_assign_roles_rejects_wrong_domain():
-    with pytest.raises(ValueError, match="QA-only"):
-        assign_roles("finance", num_workers=6, rng=random.Random(0))
+def test_assign_roles_accepts_code_synthesis_domain():
+    agents = assign_roles("code_synthesis", num_workers=6, rng=random.Random(0))
+    reporter_count = sum(agent.role == Role.REPORTER for agent in agents)
+    assert len(agents) == 6
+    assert reporter_count == 1
+
+
+def test_assign_roles_still_rejects_zero_workers():
+    with pytest.raises(ValueError, match="num_workers must be positive"):
+        assign_roles("code_synthesis", num_workers=0)
 
 
 def test_malicious_count_from_label_all_returns_total_agents():

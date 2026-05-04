@@ -21,8 +21,6 @@ QA_ROLE_PLAN = [
 
 
 def assign_roles(domain: str, num_workers: int = None, rng: Optional[random.Random] = None) -> List[Agent]:
-    if domain != "knowledge_qa":
-        raise ValueError("This codebase is QA-only. Use domain='knowledge_qa'.")
     if num_workers is None:
         num_workers = config.NUM_WORKERS
     if num_workers <= 0:
