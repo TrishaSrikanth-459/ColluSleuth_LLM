@@ -59,6 +59,7 @@ After the `domain-agnostic-infra` branch, the registry contains exactly one doma
 - `src/covert_collusive_hotpot/domains/base.py`
 - `src/covert_collusive_hotpot/domains/registry.py`
 - `src/covert_collusive_hotpot/agents/detector.py`
+- `src/covert_collusive_hotpot/experiments/prompt_injection.py`
 - `src/covert_collusive_hotpot/experiments/role_assignment.py`
 - `src/covert_collusive_hotpot/core/config.py`
 - `pyproject.toml`
@@ -125,7 +126,7 @@ class CodeSynthesisDomain(DomainSpec):
 
 **Role assignment:** Calls the shared `assign_roles` / `mark_malicious` utilities. The `assign_roles` domain guard (`if domain != "knowledge_qa": raise`) is removed — roles (REPORTER, ANALYST, RESEARCHER) are domain-agnostic.
 
-**Prompt injection:** Calls `inject_hidden_prompts` from `experiments/prompt_injection.py` with code-synthesis-specific adaptation strings defined in `domain.py`. The four base attack prompts are already generic. Only the "for this task" adaptation suffix is domain-specific. `knowledge_level` is always `None` for code synthesis.
+**Prompt injection:** Calls `inject_hidden_prompts` from `experiments/prompt_injection.py`. An optional `adaptations` parameter is added to `inject_hidden_prompts` — if provided, it overrides the module-level `ATTACK_ADAPTATIONS` dict for that call. Code-synthesis-specific adaptation strings are defined in `domain.py` and passed through this parameter. The four base attack prompts are already generic enough to apply to code synthesis. `knowledge_level` is always `None` for code synthesis and the knowledge-level suffix logic is skipped when it is `None`.
 
 **Detector tools:** Returns a factory that registers `analyze_patch` from `detector_tools.py` and supplies a code-synthesis evidence validator.
 
