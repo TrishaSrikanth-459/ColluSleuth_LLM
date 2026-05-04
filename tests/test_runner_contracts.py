@@ -126,7 +126,7 @@ def test_prepare_agents_for_task_uses_domain_for_roles_and_prompt_injection(monk
 
     class FakeDomain:
         name = "knowledge_qa"
-        capabilities = type("Caps", (), {"language_only_permissions": True})()
+        capabilities = type("Caps", (), {"language_only_permissions": True, "deferred_functional_correctness": False})()
 
         def assign_roles(self, rng):
             calls.append(("assign_roles", rng))
@@ -196,7 +196,7 @@ def test_run_single_task_delegates_agent_setup_through_prepare_helper(monkeypatc
     class FakeLogger:
         db_path = "fake.db"
 
-    capabilities = type("Caps", (), {"language_only_permissions": False})()
+    capabilities = type("Caps", (), {"language_only_permissions": False, "deferred_functional_correctness": False})()
 
     class FakeSimulation:
         def __init__(self, workers, detectors, total_turns, experiment_id, metadata, domain, domain_capabilities):
@@ -581,3 +581,33 @@ def test_simulation_detection_latency_matches_evaluator_turn_definition() -> Non
     assert metrics["detection_precision"] == 1.0
     assert metrics["attribution_accuracy"] == 0.5
     assert metrics["detection_latency"] == 2.0
+
+
+def test_deferred_correctness_domain_writes_none_for_functional_correctness() -> None:
+    import time as time_mod
+
+    class DeferredCaps:
+        deferred_functional_correctness = True
+        language_only_permissions = False
+
+    class DeferredDomain:
+        capabilities = DeferredCaps()
+
+    correctness_called = []
+
+    class FakeEvaluator:
+        def compute_functional_correctness(self):
+            correctness_called.append(True)
+            return 1.0
+
+    domain = DeferredDomain()
+    evaluator = FakeEvaluator()
+
+    fc = (
+        None
+        if domain.capabilities.deferred_functional_correctness
+        else evaluator.compute_functional_correctness()
+    )
+
+    assert fc is None
+    assert correctness_called == []

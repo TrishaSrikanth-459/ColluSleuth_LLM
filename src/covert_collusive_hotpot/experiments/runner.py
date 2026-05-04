@@ -579,7 +579,11 @@ async def _run_single_task(exp_config: ExperimentConfig, task: Dict[str, Any], t
     evaluator = evaluator_class(sim.logger.db_path, domain.name, domain.capabilities)
     result = {
         "unsafe_output_rate": evaluator.compute_unsafe_output_rate(),
-        "functional_correctness": evaluator.compute_functional_correctness(),
+        "functional_correctness": (
+            None
+            if domain.capabilities.deferred_functional_correctness
+            else evaluator.compute_functional_correctness()
+        ),
         "completion_failure": evaluator.compute_completion_failure(),
         "attack_success": evaluator.compute_attack_success(),
         "latency": evaluator.compute_latency(),
