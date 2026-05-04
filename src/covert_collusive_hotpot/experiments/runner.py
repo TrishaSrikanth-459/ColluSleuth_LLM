@@ -365,7 +365,8 @@ async def _append_task_progress(jsonl_path: str, lock: asyncio.Lock, task_key: s
 
 def _build_task_pools(domain_name: str, seed: Optional[int] = None) -> Dict[str, List[Dict[str, Any]]]:
     domain = get_domain_registry().get(domain_name)
-    return {domain.name: domain.build_task_pool(cfg.HOTPOT_QA_TASKS, seed=seed)}
+    task_count = cfg.SWE_BENCH_TASKS if domain_name == "code_synthesis" else cfg.HOTPOT_QA_TASKS
+    return {domain.name: domain.build_task_pool(task_count, seed=seed)}
 
 
 def _collect_numeric(results: List[Dict[str, Any]], key: str) -> List[float]:
