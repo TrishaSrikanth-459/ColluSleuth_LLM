@@ -536,6 +536,7 @@ async def _run_single_task(exp_config: ExperimentConfig, task: Dict[str, Any], t
                     None,
                     detector_ids=detector_ids,
                     task_metadata=task,
+                    domain_spec=domain,
                 )
             )
 

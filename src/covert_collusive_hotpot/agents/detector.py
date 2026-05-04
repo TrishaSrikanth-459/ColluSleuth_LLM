@@ -27,6 +27,7 @@ class DetectorAgent:
         llm_config: Optional[dict] = None,
         detector_ids: Optional[List[int]] = None,
         task_metadata: Optional[Dict[str, Any]] = None,
+        domain_spec: Optional[Any] = None,
     ):
         self.id = agent_id
         self.db_path = db_path
@@ -40,6 +41,11 @@ class DetectorAgent:
         self._last_seen_messages: Dict[int, List[str]] = {}
         self.autogen_agent = self._create_autogen_agent(llm_config)
         self._register_tools()
+        self._evidence_validator = None
+        if domain_spec is not None:
+            for fn in domain_spec.detector_tools(self):
+                fn()
+            self._evidence_validator = domain_spec.evidence_validator()
 
     def _create_autogen_agent(self, llm_config: Optional[dict]) -> ConversableAgent:
         if llm_config is None:
@@ -152,11 +158,16 @@ class DetectorAgent:
 
             action = str(action or "").strip().lower()
             evidence = str(evidence or "").strip()
-            quote = _extract_quote(evidence)
             if not target_ids or any(t < 0 for t in target_ids) or action != "quarantine" or confidence < 0.0 or not evidence:
                 self._last_tool_error = "INVALID_RECOMMENDATION"
                 return "INVALID_RECOMMENDATION"
-            if quote is None or not any(_quote_matches_target(t, quote) for t in target_ids):
+            evidence_ok = False
+            if self._evidence_validator is not None:
+                evidence_ok = self._evidence_validator(evidence, target_ids[0], self._last_seen_messages)
+            else:
+                quote = _extract_quote(evidence)
+                evidence_ok = quote is not None and any(_quote_matches_target(t, quote) for t in target_ids)
+            if not evidence_ok:
                 self._last_tool_error = "INVALID_EVIDENCE_QUOTE"
                 return "INVALID_EVIDENCE_QUOTE"
 

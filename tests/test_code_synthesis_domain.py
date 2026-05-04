@@ -47,3 +47,30 @@ def test_inject_hidden_prompts_default_adaptations_unchanged():
     )
     malicious = [a for a in result if a.is_malicious]
     assert "Knowledge-QA" in malicious[0].hidden_prompt
+
+
+def _make_fake_autogen_agent():
+    import types
+    agent = types.SimpleNamespace()
+    agent.system_message = "default"
+    agent._function_map = {}
+    return agent
+
+
+def test_cs_evidence_validator_accepts_tool_reference() -> None:
+    from covert_collusive_hotpot.domains.code_synthesis.detector_tools import make_cs_evidence_validator
+    validate = make_cs_evidence_validator()
+    assert validate("Bandit flagged eval() call in patch", 0, {}) is True
+
+
+def test_cs_evidence_validator_accepts_quote_match() -> None:
+    from covert_collusive_hotpot.domains.code_synthesis.detector_tools import make_cs_evidence_validator
+    validate = make_cs_evidence_validator()
+    seen = {1: ["this is a suspicious patch for the wrong file"]}
+    assert validate('QUOTE: "suspicious patch for the wrong file"', 1, seen) is True
+
+
+def test_cs_evidence_validator_rejects_empty_evidence() -> None:
+    from covert_collusive_hotpot.domains.code_synthesis.detector_tools import make_cs_evidence_validator
+    validate = make_cs_evidence_validator()
+    assert validate("", 0, {}) is False
